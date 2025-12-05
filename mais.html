@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NosPlay — Mais Jogos</title>
+
+<style>
+/* ======== TEMA GERAL ======== */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #001f4d, #003d99, #0a58ca);
+    color: white;
+    text-align: center;
+}
+
+/* TÍTULO NOSPLAY */
+h1 {
+    font-size: 40px;
+    margin-top: 20px;
+    color: gold;
+    text-shadow: 0 0 10px gold;
+    font-weight: 900;
+    letter-spacing: 2px;
+}
+
+/* SUBTÍTULO */
+h2 {
+    margin-top: 0;
+    font-size: 26px;
+    font-weight: 600;
+    color: #d6e4ff;
+    text-shadow: 0 0 5px #000;
+}
+
+/* TEXTO DESCRITIVO */
+.texto {
+    width: 90%;
+    max-width: 600px;
+    margin: 20px auto;
+    background: rgba(0, 0, 0, 0.35);
+    padding: 20px;
+    border-radius: 15px;
+    font-size: 18px;
+    line-height: 1.6;
+    box-shadow: 0 0 15px rgba(255, 255, 255, .15);
+}
+
+/* CARDS DE JOGOS FUTUROS */
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 90%;
+    max-width: 650px;
+    margin: 30px auto;
+}
+
+.card {
+    background: #002b80;
+    padding: 20px;
+    border-radius: 15px;
+    color: white;
+    font-size: 22px;
+    font-weight: bold;
+    text-transform: uppercase;
+    box-shadow: 0 0 10px rgba(0, 100, 255, 0.5);
+    border: 2px solid #0055ff;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.card:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px #3399ff;
+    cursor: pointer;
+}
+
+/* BOTÃO VOLTAR */
+.btn-voltar {
+    margin: 40px auto;
+    background: #ffcc00;
+    color: #001f4d;
+    padding: 15px 35px;
+    border-radius: 10px;
+    font-size: 22px;
+    font-weight: 900;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 0 15px #ffcc00;
+    transition: 0.3s;
+}
+
+.btn-voltar:hover {
+    background: #ffe066;
+    box-shadow: 0 0 25px #ffe066;
+    transform: scale(1.05);
+}
+
+</style>
+
+<script>
+function voltar() {
+    window.history.back();
+}
+</script>
+</head>
+
+<body>
+
+<h1>NosPlay</h1>
+<h2>Mais Jogos em Desenvolvimento</h2>
+
+<div class="texto">
+    O universo de jogos do <strong>HolyPlay — NosPlay</strong> está crescendo!  
+    Aqui você encontrará futuros lançamentos, modos especiais e experiências criadas
+    para tornar seu tempo de diversão e aprendizado ainda mais incrível.
+    <br><br>
+    Estamos trabalhando para trazer jogos bíblicos mais modernos, competitivos,
+    desafiantes e com aquele estilo verdadeiramente <strong>GAMER</strong> que você adora.
+</div>
+
+<div class="container">
+
+    <div class="card">
+        ⚔️ Modo Batalha de Versículos  
+    </div>
+
+    <div class="card">
+        🧩 Quebra-Cabeças Bíblicos
+    </div>
+
+    <div class="card">
+        🚀 Aventura dos Profetas
+    </div>
+
+    <div class="card">
+        🏆 Torneios Sagrados Online
+    </div>
+
+    <div class="card">
+        🎯 Desafios Diários (Modo Hardcore)
+    </div>
+
+    <div class="card">
+        📜 Histórias Interativas da Bíblia
+    </div>
+
+</div>
+
+<button class="btn-voltar" onclick="voltar()">Voltar</button>
+
+</body>
+</html>

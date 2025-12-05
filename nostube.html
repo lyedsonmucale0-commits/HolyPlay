@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NosTube Cristão</title>
+<link rel="icon" href="data:," />
+<style>
+:root{
+  --bg:#071f3c; --surface:#0b2a57; --card:#0f345f; --muted:#98a3b3; --accent:#4da6ff; --glass: rgba(255,255,255,0.03);
+  --text:#e6f0fb; --gold:#ffd700;
+}
+[data-theme="light"]{
+  --bg:#f4f7fb; --surface:#ffffff; --card:#e0ebff; --muted:#5b6b7a; --accent:#0d6efd; --glass: rgba(0,0,0,0.04); --text:#071022; --gold:#c59d00;
+}
+*{box-sizing:border-box;}
+html,body{height:100%; margin:0; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial; background:var(--bg); color:var(--text);}
+header.appbar{display:flex;align-items:center;justify-content:center;padding:14px 16px;background:linear-gradient(90deg, rgba(0,0,0,0.25), transparent); position:sticky;top:0;z-index:60;border-bottom:1px solid rgba(255,255,255,0.02)}
+.brand{display:flex;gap:12px;align-items:center; justify-content:center;}
+.logo{background:var(--gold); width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#022032;font-size:18px;box-shadow:0 6px 18px rgba(255,215,0,0.4);}
+h1{margin:0;font-size:22px;color:var(--gold);}
+.controls{display:flex;gap:8px;align-items:center;position:absolute;right:16px;}
+.btn{background:transparent;border:1px solid rgba(255,255,255,0.04);padding:8px 12px;border-radius:10px;color:var(--text);cursor:pointer}
+.btn.primary{background:var(--accent);color:#022032;border:none}
+.search-bar{max-width:840px;margin:16px auto;display:flex;gap:8px;padding:0 16px}
+input.search{flex:1;padding:14px 16px;border-radius:12px;border:1px solid rgba(255,255,255,0.04);background:var(--surface);color:var(--text);font-size:16px}
+.container{max-width:1100px;margin:0 auto;padding:12px;display:grid;grid-template-columns:340px 1fr;gap:18px}
+@media(max-width:960px){ .container{grid-template-columns:1fr} .search-bar{padding:0 10px} }
+.sidebar{background:var(--card);border-radius:12px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,0.4)}
+.section-title{font-size:13px;color:var(--muted);margin:12px 0 8px}
+.chip{display:inline-block;padding:8px 10px;border-radius:999px;margin:6px 6px 6px 0;background:transparent;border:1px solid rgba(255,255,255,0.03);cursor:pointer;color:var(--text);font-size:13px}
+.chip.active{background:var(--accent);color:#022032;border:none}
+.favorites{margin-top:10px}
+.fav-item{display:flex;gap:10px;align-items:center;padding:8px;border-radius:8px;cursor:pointer;border:1px solid rgba(255,255,255,0.02);margin-bottom:8px}
+.fav-item img{width:80px;height:48px;object-fit:cover;border-radius:6px}
+.hero{background:var(--surface);border-radius:12px;padding:14px;display:flex;align-items:center;justify-content:space-between}
+.featured-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-top:12px}
+.card{background:var(--surface);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .18s, box-shadow .18s;border:1px solid rgba(255,255,255,0.02);position:relative;}
+.card:hover{transform:translateY(-6px);box-shadow:0 18px 40px rgba(0,0,0,0.55)}
+.thumb{width:100%;height:110px;object-fit:cover}
+.card-body{padding:10px}
+.title{font-size:14px;margin:0 0 6px;color:var(--text)}
+.sub{font-size:12px;color:var(--muted);margin:0}
+.player-wrap{margin-top:16px;background:var(--card);border-radius:12px;padding:12px;border:1px solid rgba(255,255,255,0.02);transition:all .3s ease;position:sticky;top:10px; z-index:1000;}
+.player-wrap.mini{position:fixed;width:240px;height:135px;bottom:16px;right:16px;z-index:1001;border-radius:10px;cursor:pointer;}
+.player-wrap.mini #player{height:100%;width:100%;}
+.player-wrap.mini .player-controls{display:none;}
+#player{width:100%;height:420px;border-radius:10px;background:#000;border:none}
+#btnClosePlayer{position:absolute;top:8px;right:8px;z-index:1010;}
+@media(max-width:640px){ #player{height:240px} .thumb{height:90px} }
+.results-grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:12px}
+footer.note{text-align:center;color:var(--muted);font-size:13px;padding:18px 0}
+.autocomplete{position:relative}
+.suggest{position:absolute;left:0;right:0;top:44px;background:var(--surface);border-radius:8px;overflow:auto;max-height:200px;border:1px solid rgba(255,255,255,0.02);z-index:100;display:none}
+.suggest div{padding:8px 10px;cursor:pointer;color:var(--text)}
+.suggest div:hover{background:rgba(255,255,255,0.1);}
+.player-controls{display:flex;gap:8px;margin-top:4px;align-items:center;}
+</style>
+</head>
+<body data-theme="dark">
+
+<header class="appbar">
+  <div class="brand">
+    <div class="logo">NT</div>
+    <div>
+      <h1>NosTube Cristão</h1>
+    </div>
+  </div>
+  <div class="controls">
+    <button class="btn icon" id="themeToggle" title="Tema">🌙</button>
+  </div>
+</header>
+
+<div class="search-bar">
+  <div style="flex:1;position:relative">
+    <input id="searchInput" class="search" placeholder="Pesquisar: João 3, louvor, devocional..." autocomplete="off" />
+    <div id="suggest" class="suggest"></div>
+  </div>
+  <button class="btn primary" id="searchBtn">Pesquisar</button>
+</div>
+
+<main class="container">
+  <aside class="sidebar">
+    <div class="section-title">Categorias</div>
+    <div id="categories">
+      <button class="chip" data-cat="Jesus">Jesus</button>
+      <button class="chip" data-cat="Devocional">Devocional</button>
+      <button class="chip" data-cat="Louvor">Louvor</button>
+      <button class="chip" data-cat="Pregação">Pregação</button>
+      <button class="chip" data-cat="Estudo Bíblico">Estudo Bíblico</button>
+    </div>
+    <div class="section-title">Favoritos</div>
+    <div id="favoritesList" class="favorites">
+      <div style="color:var(--muted);font-size:13px">Nenhum favorito ainda — clique no ♥ em um vídeo</div>
+    </div>
+  </aside>
+
+  <section>
+    <div class="hero card">
+      <div>
+        <h2 style="margin:0">Vídeo do Dia</h2>
+        <div id="heroSubtitle" style="color:var(--muted);font-size:13px">Destaques selecionados automaticamente</div>
+      </div>
+    </div>
+
+    <div id="playerWrap" class="player-wrap" style="display:none">
+      <button id="btnClosePlayer" class="btn">✖ Fechar</button>
+      <div class="player-controls" style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <strong id="playerTitle"></strong>
+          <div id="playerChannel" style="color:var(--muted);font-size:13px"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" id="btnFav">♡ Favoritar</button>
+          <button class="btn" id="btnStop">⏹ Parar</button>
+          <button class="btn" id="btnMini">🔽</button>
+          <button class="btn" id="btnFull">⛶</button>
+        </div>
+      </div>
+      <div id="player"></div>
+      <div id="playerDesc" style="margin-top:10px;color:var(--muted);font-size:13px"></div>
+    </div>
+
+    <div class="section-title" style="margin-top:14px">Resultados</div>
+    <div id="resultsGrid" class="results-grid"></div>
+
+    <div class="section-title" style="margin-top:14px">Destaques</div>
+    <div id="featuredGrid" class="featured-grid"></div>
+  </section>
+</main>
+
+<footer class="note">Nosdeyl Elacum — Todos os direitos reservados.</footer>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<script>
+// --- CONFIGURAÇÃO ---
+const API_KEY = "AIzaSyDZ5DoeHVA2F1ylIbovTdKioOX-ApJLfos"; 
+const MAX_SEARCH = 50; // resultados por pesquisa
+const MIN_SEARCH = 30; // mínimo de resultados
+const SEARCH_TTL_MS = 1000*60*60;
+const FEATURED_TTL_MS = 1000*60*60*12;
+
+// --- 100 keywords cristãs ---
+const christianKeywords = [
+"jesus","cristo","biblia","evangelho","louvor","adoração","oração","pregação","sermão","salvação",
+"deus","devocional","igreja","biblico","adoração","fé","vida cristã","palavra","ministerio","reflexão",
+"louvor ao vivo","oração diária","mensagem","biblico online","culto","adoraçao","jesus cristo","santo",
+"espirito santo","jesus é vida","palavra de deus","louvor e adoração","devocional diário","fé cristã",
+"pregação online","reflexão bíblica","estudo bíblico","bíblico","palavra viva","adoração ao senhor",
+"louvor cristão","mensagem de fé","caminho de luz","vida em cristo","louvor diário","adoração online",
+"evangelho hoje","jesus nosso senhor","palavra e louvor","devocional cristão","mensagem cristã","fé e vida",
+"louvor e esperança","cristão online","louvor e palavra","adoração em casa","pregações online","palavra de esperança",
+"ministério online","palavra e vida","louvor e reflexão","caminho da bíblia","evangelho de jesus","louvor mundial",
+"adoração universal","devocional global","bíblia e vida","evangelho tv","louvor sem fronteiras","palavra mundial",
+"cristo global","canal gospel","louvor internacional","hillsong portugal","jesus copy","canção cristã",
+"devocional sem fronteiras","cristão do mundo","palavra universal","louvor cristão global","jesus tv",
+"cristo internacional","louvor e vida global","crescendo em cristo global","fé mundial","adoração tv",
+"palavra cristã global","devocional mundial","evangelho tv global","louvor mundial","vida e fé","adoração em casa",
+"mensagem de cristo","cristão sempre","jesus e adoração","louvor e reflexão","evangelho diário","caminho de cristo"
+];
+
+const suggestedChannels = [ /* 100 canais como antes */ ];
+
+// --- VARIÁVEIS ---
+let player, favorites=JSON.parse(localStorage.getItem('np_favs')||'[]'), lastPlayed=JSON.parse(localStorage.getItem('np_last_played')||'null');
+const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const resultsGrid = document.getElementById('resultsGrid');
+const playerWrap = document.getElementById('playerWrap');
+const playerTitle = document.getElementById('playerTitle');
+const playerChannel = document.getElementById('playerChannel');
+const playerDesc = document.getElementById('playerDesc');
+const btnFav = document.getElementById('btnFav');
+const favoritesList = document.getElementById('favoritesList');
+const featuredGrid = document.getElementById('featuredGrid');
+const btnStop = document.getElementById('btnStop');
+const btnMini = document.getElementById('btnMini');
+const btnFull = document.getElementById('btnFull');
+const btnClosePlayer = document.getElementById('btnClosePlayer');
+const themeToggle = document.getElementById('themeToggle');
+
+let nextPageToken = null; // scroll infinito
+let currentQuery = '';
+let isLoading = false;
+
+// --- THEME ---
+themeToggle.onclick = ()=>{
+  const cur=document.body.getAttribute('data-theme')||'dark';
+  const next=cur==='dark'?'light':'dark';
+  document.body.setAttribute('data-theme',next);
+  themeToggle.textContent=next==='dark'?'🌙':'☀️';
+  localStorage.setItem('np_theme',next);
+}
+
+// --- CACHE ---
+function now(){return Date.now();}
+function cacheSet(k,v){localStorage.setItem(k,JSON.stringify({ts:now(),v}))}
+function cacheGet(k,ttl){try{const r=JSON.parse(localStorage.getItem(k));if(!r?.ts||!r?.v)return null;if(now()-r.ts>ttl){localStorage.removeItem(k);return null;}return r.v}catch(e){localStorage.removeItem(k);return null;}}
+
+// --- YOUTUBE PLAYER ---
+function onYouTubeIframeAPIReady(){player=new YT.Player('player',{height:'420',width:'100%',videoId:'',playerVars:{'autoplay':1,'controls':1,'rel':0,'modestbranding':1}});}
+
+function playVideo(videoId,title='',channel='',desc='',mini=false){
+  player.loadVideoById(videoId);
+  playerWrap.style.display='block';
+  playerTitle.textContent = title;
+  playerChannel.textContent = channel;
+  playerDesc.textContent = desc.slice(0,400) + (desc.length > 400 ? '...' : '');
+  lastPlayed = {videoId, title, channel};
+  localStorage.setItem('np_last_played', JSON.stringify(lastPlayed));
+  btnFav.textContent = favorites.some(f => f.videoId === videoId) ? '♥ Favorito' : '♡ Favoritar';
+  if(mini){ playerWrap.classList.add('mini'); }
+  else{
+    playerWrap.classList.remove('mini');
+    window.scrollTo({top:playerWrap.offsetTop-10,behavior:'smooth'});
+  }
+}
+
+// --- CONTROLS ---
+btnMini.onclick=()=>{playerWrap.classList.add('mini');}
+btnFull.onclick=()=>{if(playerWrap.classList.contains('mini')){playerWrap.classList.remove('mini'); window.scrollTo({top:0,behavior:'smooth'});}}
+btnStop.onclick=()=>{player.stopVideo(); playerWrap.style.display='none';}
+btnClosePlayer.onclick=()=>{player.stopVideo(); playerWrap.style.display='none';}
+
+// --- FAVORITOS ---
+function renderFavs(){
+  favoritesList.innerHTML='';
+  if(!favorites.length){favoritesList.innerHTML='<div style="color:var(--muted);font-size:13px">Nenhum favorito ainda — clique no ♥ em um vídeo</div>';return;}
+  favorites.forEach(f=>{
+    const row=document.createElement('div'); row.className='fav-item';
+    const img=document.createElement('img'); img.src=f.thumb;
+    const meta=document.createElement('div'); meta.style.flex='1';
+    const t=document.createElement('div'); t.textContent=f.title; t.style.fontSize='14px';
+    const c=document.createElement('div'); c.textContent=f.channel; c.style.fontSize='12px'; c.style.color='var(--muted)';
+    meta.appendChild(t); meta.appendChild(c);
+    const play=document.createElement('button'); play.className='btn'; play.textContent='▶'; play.onclick=()=>playVideo(f.videoId,f.title,f.channel,'');
+    const rem=document.createElement('button'); rem.className='btn'; rem.textContent='✖'; rem.onclick=()=>{favorites=favorites.filter(x=>x.videoId!==f.videoId); localStorage.setItem('np_favs',JSON.stringify(favorites)); renderFavs();}
+    row.appendChild(img); row.appendChild(meta); row.appendChild(play); row.appendChild(rem);
+    favoritesList.appendChild(row);
+  })
+}
+btnFav.onclick=()=>{
+  if(!lastPlayed)return;
+  const exists=favorites.some(f=>f.videoId===lastPlayed.videoId);
+  if(exists){favorites=favorites.filter(f=>f.videoId!==lastPlayed.videoId);}
+  else{favorites.push({...lastPlayed,thumb:`https://img.youtube.com/vi/${lastPlayed.videoId}/mqdefault.jpg`});}
+  localStorage.setItem('np_favs',JSON.stringify(favorites));
+  btnFav.textContent = exists?'♡ Favoritar':'♥ Favorito';
+  renderFavs();
+}
+renderFavs();
+
+// --- FILTRAGEM POR TAGS ---
+document.querySelectorAll('#categories .chip').forEach(el=>{
+  el.onclick=()=>{
+    document.querySelectorAll('#categories .chip').forEach(c=>c.classList.remove('active'));
+    el.classList.add('active');
+    const cat=el.dataset.cat;
+    searchInput.value=cat;
+    searchVideos(cat);
+  }
+});
+
+// --- AUTOCOMPLETE ---
+searchInput.addEventListener('input',()=>{
+  const val=searchInput.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const sugg=christianKeywords.filter(k=>k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').includes(val)).slice(0,5);
+  const suggestBox=document.getElementById('suggest'); suggestBox.innerHTML='';
+  if(sugg.length){suggestBox.style.display='block';sugg.forEach(s=>{const d=document.createElement('div');d.textContent=s; d.onclick=()=>{searchInput.value=s; searchVideos(s); suggestBox.style.display='none'}; suggestBox.appendChild(d);});}
+  else{document.getElementById('suggest').style.display='none'}
+});
+
+// --- PESQUISA ---
+searchBtn.onclick=()=>searchVideos(searchInput.value);
+function searchVideos(query){
+  if(!query.trim()) return;
+  if(isLoading) return;
+  currentQuery=query; nextPageToken=null; resultsGrid.innerHTML=''; loadMore();
+}
+
+// --- SCROLL INFINITO ---
+window.addEventListener('scroll',()=>{
+  if(window.innerHeight + window.scrollY >= document.body.offsetHeight - 200){ loadMore(); }
+});
+
+async function loadMore(){
+  if(isLoading) return;
+  isLoading=true;
+  let q=currentQuery;
+  const cacheKey='yt_'+q+'_'+(nextPageToken||'first');
+  let data=cacheGet(cacheKey,SEARCH_TTL_MS);
+  if(!data){
+    let url='https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults='+MAX_SEARCH+'&q='+encodeURIComponent(q)+'&key='+API_KEY;
+    if(nextPageToken) url+='&pageToken='+nextPageToken;
+    try{
+      const resp=await fetch(url);
+      data=await resp.json();
+      cacheSet(cacheKey,data);
+    }catch(e){console.error(e); isLoading=false; return;}
+  }
+  nextPageToken=data.nextPageToken||null;
+  data.items.forEach(it=>{
+    const vid=it.id.videoId, sn=it.snippet;
+    const card=document.createElement('div'); card.className='card';
+    const thumb=document.createElement('img'); thumb.className='thumb'; thumb.src=sn.thumbnails.medium.url;
+    const body=document.createElement('div'); body.className='card-body';
+    const t=document.createElement('div'); t.className='title'; t.textContent=sn.title;
+    const c=document.createElement('div'); c.className='sub'; c.textContent=sn.channelTitle;
+    body.appendChild(t); body.appendChild(c);
+    card.appendChild(thumb); card.appendChild(body);
+    card.onclick=()=>playVideo(vid,sn.title,sn.channelTitle,sn.description||'');
+    resultsGrid.appendChild(card);
+  });
+  isLoading=false;
+}
+
+// --- DESTAQUES (opcional) ---
+function renderFeatured(videos){
+  featuredGrid.innerHTML='';
+  videos.forEach(it=>{
+    const vid=it.videoId; const sn=it.snippet;
+    const card=document.createElement('div'); card.className='card';
+    const thumb=document.createElement('img'); thumb.className='thumb'; thumb.src=sn.thumbnails.medium.url;
+    const body=document.createElement('div'); body.className='card-body';
+    const t=document.createElement('div'); t.className='title'; t.textContent=sn.title;
+    const c=document.createElement('div'); c.className='sub'; c.textContent=sn.channelTitle;
+    body.appendChild(t); body.appendChild(c);
+    card.appendChild(thumb); card.appendChild(body);
+    card.onclick=()=>playVideo(vid,sn.title,sn.channelTitle,sn.description||'');
+    featuredGrid.appendChild(card);
+  })
+}
+</script>
+</body>
+</html>

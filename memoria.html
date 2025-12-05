@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NOSPLAY — Jogo da Memória Bíblico</title>
+<style>
+:root{
+--blue-levels:#0055ff;
+--black-game:#000000;
+--white:#ffffff;
+--gold:#d4af37;
+--locked-gray:#bdbdbd;
+--card-back:#222;
+--card-front:#ffffff;
+}
+html,body{height:100%;margin:0;font-family:Inter,Arial,sans-serif;background:var(--blue-levels);color:var(--white);}
+header{padding:18px 12px;text-align:center;background:var(--blue-levels);}
+header h1{margin:0;color:var(--gold);font-size:32px;font-weight:800;letter-spacing:1px;}
+.screen{display:none;min-height:calc(100vh - 76px);padding:18px 14px;box-sizing:border-box;}
+.show{display:block;}
+#levels-screen{background:var(--blue-levels);}
+#grade{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:1200px;margin:20px auto;}
+.level-card{background:var(--white);color:#000;border-radius:10px;padding:18px 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;min-height:100px;transition:transform .12s}
+.level-card:hover{transform:translateY(-6px)}
+.lock-icon{position:absolute;top:8px;right:10px;font-size:18px;color:#333}
+.btn{background:transparent;border:2px solid var(--gold);color:var(--gold);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+.btn-red{background:#ff4d4d;color:white;border:none}
+#game-screen{background:var(--black-game);color:var(--white);}
+.game-top{display:flex;justify-content:space-between;align-items:center;gap:12px;max-width:1100px;margin:0 auto 18px;padding:6px}
+.badge{color:var(--gold);font-weight:800}
+.nav{display:flex;gap:8px}
+#timer{color:var(--gold);font-weight:700}
+#memory-board{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:720px;margin:0 auto;}
+.card{background:var(--card-back);color:#000;height:100px;display:flex;justify-content:center;align-items:center;font-weight:700;font-size:16px;border-radius:12px;cursor:pointer;user-select:none;transition:transform .3s,background .3s;position:relative;perspective:600px;}
+.card-inner{position:relative;width:100%;height:100%;text-align:center;transition:transform .5s;transform-style:preserve-3d;}
+.card.flipped .card-inner{transform:rotateY(180deg);}
+.card-front,.card-back{position:absolute;width:100%;height:100%;backface-visibility:hidden;display:flex;justify-content:center;align-items:center;border-radius:12px;text-align:center;padding:5px;}
+.card-front{background:var(--card-front);color:#000;transform:rotateY(180deg);}
+.card-back{background:var(--card-back);color:#fff;}
+footer{position:fixed;left:12px;bottom:12px;color:#fff;opacity:0.85}
+</style>
+</head>
+<body>
+
+<header>
+<h1>NOSPLAY</h1>
+</header>
+
+<main id="levels-screen" class="screen show">
+<div style="max-width:1200px;margin:0 auto;display:flex;justify-content:flex-end;gap:8px;padding:0 6px">
+<button class="btn" id="btn-settings" title="Configurações">Configurações</button>
+<button class="btn btn-red" id="btn-exit" title="Sair">SAIR</button>
+</div>
+<div id="grade"></div>
+</main>
+
+<section id="game-screen" class="screen">
+<div class="game-top">
+<div class="badge" id="level-badge">Nível 1 - Rodada 1/10</div>
+<div class="nav">
+<div id="timer">Tempo: <span id="time-left">120</span>s</div>
+<button class="btn" id="btn-back">Níveis</button>
+<button class="btn" id="btn-music-toggle">Play Music</button>
+</div>
+</div>
+<div id="memory-board"></div>
+</section>
+
+<audio id="music" loop src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
+
+<footer>Desenvolvido — NOSPLAY</footer>
+
+<script>
+const TOTAL_LEVELS=100;
+const ROUNDS_PER_LEVEL=10;
+const TIME_PER_LEVEL=120;
+
+let unlocked=JSON.parse(localStorage.getItem('nosplay_unlocked'))||[1];
+let currentLevel=null,currentRound=0,timeLeft=TIME_PER_LEVEL,timerInterval=null;
+
+const gradeEl=document.getElementById('grade');
+const levelsScreen=document.getElementById('levels-screen');
+const gameScreen=document.getElementById('game-screen');
+const levelBadge=document.getElementById('level-badge');
+const memoryBoard=document.getElementById('memory-board');
+const timeLeftEl=document.getElementById('time-left');
+const music=document.getElementById('music');
+
+// Nomes bíblicos
+const BIBLICAL_NAMES=[
+"Noé","Moisés","Davi","Ester","José","Abraão","Maria","Pedro","Paulo","Elias","Rute","Jonas",
+"Samuel","Jacó","Isaque","Daniel","Sara","Ester","Neemias","Josué","Raabe","Calebe","Débora","Salomão",
+"Golias","Hannah","João","Marta","Lázaro","Zacarias"
+];
+
+//------------------LEVELS------------------------
+function renderLevels(){
+gradeEl.innerHTML='';
+for(let i=1;i<=TOTAL_LEVELS;i++){
+let card=document.createElement('div');
+card.className='level-card';
+if(!unlocked.includes(i)) card.classList.add('level-locked');
+card.innerHTML=`<div class="level-num">Nível ${i}</div>`;
+let lock=document.createElement('div');lock.className='lock-icon';
+lock.innerText=unlocked.includes(i)?'':'🔒';
+card.appendChild(lock);
+if(unlocked.includes(i)){card.onclick=()=>startLevel(i);}
+else{card.onclick=()=>{flashLocked(card);}}
+gradeEl.appendChild(card);
+}}
+function flashLocked(el){el.style.transform='translateY(-6px) scale(1.02)';setTimeout(()=>el.style.transform='translateY(0) scale(1)',220);}
+
+//------------------MEMORY GAME------------------------
+function startLevel(level){
+currentLevel=level;currentRound=0;
+levelBadge.innerText=`Nível ${level} - Rodada ${currentRound+1}/${ROUNDS_PER_LEVEL}`;
+levelsScreen.classList.remove('show');
+gameScreen.classList.add('show');
+timeLeft=TIME_PER_LEVEL;timeLeftEl.innerText=timeLeft;
+clearInterval(timerInterval);
+timerInterval=setInterval(()=>{
+timeLeft--;timeLeftEl.innerText=timeLeft;
+if(timeLeft<=0){clearInterval(timerInterval);alert('Tempo esgotado!');backToLevels();}
+},1000);
+startRound();
+}
+
+function startRound(){
+levelBadge.innerText=`Nível ${currentLevel} - Rodada ${currentRound+1}/${ROUNDS_PER_LEVEL}`;
+let selectedNames = shuffleArray(BIBLICAL_NAMES).slice(0,6);
+let cards = selectedNames.concat(selectedNames);
+cards=shuffleArray(cards);
+memoryBoard.innerHTML='';
+cards.forEach((name)=>{
+let card=document.createElement('div');
+card.className='card';
+card.dataset.value=name;
+card.innerHTML=`<div class="card-inner"><div class="card-front">${name}</div><div class="card-back">?</div></div>`;
+card.addEventListener('click',()=>flipCard(card));
+memoryBoard.appendChild(card);
+});
+firstCard=null;secondCard=null;lockBoard=false;
+}
+
+let firstCard=null,secondCard=null,lockBoard=false;
+function flipCard(card){
+if(lockBoard||card===firstCard||card.classList.contains('flipped')) return;
+card.classList.add('flipped');
+if(!firstCard){firstCard=card;return;}
+secondCard=card;
+lockBoard=true;
+if(firstCard.dataset.value===secondCard.dataset.value){
+setTimeout(()=>{
+resetCards();
+checkRoundComplete();
+},500);
+}else{
+setTimeout(()=>{
+firstCard.classList.remove('flipped');
+secondCard.classList.remove('flipped');
+resetCards();
+},800);
+}}
+
+function resetCards(){firstCard=null;secondCard=null;lockBoard=false;}
+
+function checkRoundComplete(){
+let flipped=document.querySelectorAll('.card.flipped');
+if(flipped.length===12){
+currentRound++;
+if(currentRound>=ROUNDS_PER_LEVEL){
+finishLevel();
+}else{
+startRound();
+}}
+}
+
+function finishLevel(){
+clearInterval(timerInterval);
+const nextLevel=currentLevel+1;
+if(nextLevel<=TOTAL_LEVELS && !unlocked.includes(nextLevel)){
+unlocked.push(nextLevel);
+localStorage.setItem('nosplay_unlocked',JSON.stringify(unlocked));
+}
+alert(`Parabéns! Você completou o Nível ${currentLevel}`);
+backToLevels();
+}
+
+//------------------NAV------------------------
+document.getElementById('btn-back').onclick=backToLevels;
+document.getElementById('btn-music-toggle').onclick=()=>{if(music.paused){music.play();document.getElementById('btn-music-toggle').innerText='Pause Music';}else{music.pause();document.getElementById('btn-music-toggle').innerText='Play Music';}};
+
+function backToLevels(){gameScreen.classList.remove('show');levelsScreen.classList.add('show');currentLevel=null;clearInterval(timerInterval);}
+
+function shuffleArray(array){for(let i=array.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[array[i],array[j]]=[array[j],array[i]];}return array;}
+
+renderLevels();
+</script>
+</body>
+</html>

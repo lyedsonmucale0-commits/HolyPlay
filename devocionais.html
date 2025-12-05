@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Devocionais</title>
+  <style>
+    :root{--bg:#0b1221;--card:#0f1724;--muted:#9aa4b2;--accent:#d4af37;--glass:rgba(255,255,255,0.03)}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:linear-gradient(180deg,#051025 0%,#07182a 100%);color:#e6eef7;-webkit-font-smoothing:antialiased}
+    .wrap{max-width:980px;margin:28px auto;padding:18px}
+    header{text-align:center;margin-bottom:12px}
+    h1{font-size:28px;margin:0;color:var(--accent);text-align:center}
+    .controls{display:flex;gap:8px;align-items:center;margin-top:14px;flex-wrap:wrap;justify-content:center}
+    .search{flex:1;min-width:180px}
+    input,select,button{padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:var(--glass);color:inherit}
+    select{color:#000;background:#fff} /* Texto das categorias em preto */
+    button.primary{background:linear-gradient(90deg,var(--accent),#6fe0ff33);border:none}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:18px}
+    article.card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
+    .meta{display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .tag{font-size:12px;padding:6px 8px;border-radius:999px;background:rgba(255,255,255,0.03);color:var(--muted)}
+    h2{font-size:16px;margin:10px 0}
+    .verse{font-weight:600;color:#dff5ff}
+    .text{margin:8px 0;color:#d3e8ff;line-height:1.45}
+    .small{font-size:13px;color:var(--muted);margin-top:8px}
+    .actions{display:flex;gap:8px;margin-top:10px}
+    .actions button{flex:1}
+    footer{margin-top:18px;color:var(--muted);font-size:13px;text-align:center}
+    @media (max-width:520px){header{flex-direction:column;align-items:flex-start} .controls{width:100%}}
+    .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 14px;background:#0f1724;border-radius:10px;border:1px solid rgba(255,255,255,0.04);display:none;color:#cfeffd}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Devocionais</h1>
+    </header>
+
+    <div class="controls">
+      <input id="q" class="search" placeholder="Pesquisar por palavra, versículo ou tag" />
+      <select id="filterCat">
+        <option value="">Todas as categorias</option>
+      </select>
+      <button id="copyAll">Copiar Texto</button>
+    </div>
+
+    <main>
+      <section class="grid" id="grid"></section>
+    </main>
+
+    <footer>
+      <small>&copy; 2025 — Todos os direitos reservados. Criado por Nosdeyl.</small>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast">Copiado para a área de transferência</div>
+
+  <script>
+    const categories = ['Fé','Esperança','Amor','Força','Sabedoria','Cura','Identidade','Coragem','Paz','Propósito'];
+
+    const biblicalVerses = [
+      {verse:'Gênesis 1:1',book:'Gênesis',text:'No princípio Deus criou os céus e a terra.'},
+      {verse:'Salmos 23:1',book:'Salmos',text:'O Senhor é o meu pastor; nada me faltará.'},
+      {verse:'João 3:16',book:'João',text:'Porque Deus amou o mundo de tal maneira que deu o seu Filho unigênito.'},
+      {verse:'Filipenses 4:13',book:'Filipenses',text:'Posso todas as coisas naquele que me fortalece.'},
+      {verse:'Romanos 8:28',book:'Romanos',text:'Sabemos que todas as coisas contribuem juntamente para o bem daqueles que amam a Deus.'},
+      {verse:'Provérbios 3:5',book:'Provérbios',text:'Confia no Senhor de todo o teu coração e não te estribes no teu próprio entendimento.'},
+      {verse:'Isaías 40:31',book:'Isaías',text:'Os que esperam no Senhor renovarão as forças.'},
+      {verse:'Mateus 6:33',book:'Mateus',text:'Buscai primeiro o Reino de Deus e a sua justiça.'},
+      {verse:'Jeremias 29:11',book:'Jeremias',text:'Porque eu bem sei os pensamentos que penso de vós, diz o Senhor.'},
+      {verse:'Hebreus 11:1',book:'Hebreus',text:'Ora, a fé é a certeza de coisas que se esperam.'}
+    ];
+
+    function generateApplicationAndPrayer(verseObj){
+      let aplicacao='', oracao='';
+      switch(verseObj.verse){
+        case 'Gênesis 1:1': aplicacao='Valorize a criação de Deus e viva em harmonia com ela.'; oracao='Senhor, ajuda-me a honrar Tua obra. Amém.'; break;
+        case 'Salmos 23:1': aplicacao='Confie na provisão de Deus.'; oracao='Senhor, guia-me como bom pastor. Amém.'; break;
+        case 'João 3:16': aplicacao='Pratique o amor ao próximo diariamente.'; oracao='Pai, ensina-me a refletir Teu amor. Amém.'; break;
+        case 'Filipenses 4:13': aplicacao='Confie em Deus para superar desafios.'; oracao='Senhor, fortalece-me em minhas dificuldades. Amém.'; break;
+        case 'Romanos 8:28': aplicacao='Confie que Deus trabalha para o bem.'; oracao='Deus, ajuda-me a confiar em Teu plano. Amém.'; break;
+        case 'Provérbios 3:5': aplicacao='Entregue suas decisões a Deus.'; oracao='Senhor, ensina-me a confiar completamente em Ti. Amém.'; break;
+        case 'Isaías 40:31': aplicacao='Renove suas forças na fé e esperança.'; oracao='Senhor, renova minhas forças e esperança. Amém.'; break;
+        case 'Mateus 6:33': aplicacao='Priorize o Reino de Deus em suas escolhas.'; oracao='Pai, ajuda-me a colocar Teu Reino em primeiro lugar. Amém.'; break;
+        case 'Jeremias 29:11': aplicacao='Confie que Deus tem planos de esperança.'; oracao='Senhor, ajuda-me a confiar em Teus planos. Amém.'; break;
+        case 'Hebreus 11:1': aplicacao='Fortaleça sua fé crendo nas promessas de Deus.'; oracao='Senhor, aumenta minha fé e paciência. Amém.'; break;
+        default: aplicacao='Reflita sobre este versículo.'; oracao='Senhor, guia-me para viver Tua palavra. Amém.';
+      }
+      return {aplicacao, oracao};
+    }
+
+    const devotionals = Array.from({length:1000},(_,i)=>{
+      const cat = categories[i % categories.length];
+      const b = biblicalVerses[i % biblicalVerses.length];
+      const ao = generateApplicationAndPrayer(b);
+      return {titulo: `Devocional: ${b.book}`, versiculo: b.verse, texto: b.text, aplicacao: ao.aplicacao, oracao: ao.oracao, tag: cat};
+    });
+
+    const grid = document.getElementById('grid');
+    const filterCat = document.getElementById('filterCat');
+    const q = document.getElementById('q');
+    const toast = document.getElementById('toast');
+    const copyAllBtn = document.getElementById('copyAll');
+
+    function makeCard(d, idx){
+      const el = document.createElement('article'); el.className='card';
+      el.innerHTML = `<div class="meta"><span class="tag">${d.tag}</span><small>${d.versiculo}</small></div><h2>${d.titulo}</h2><div class="verse">${d.versiculo}</div><p class="text">${d.texto}</p><div class="small"><strong>Aplicação:</strong> ${d.aplicacao}</div><div class="small" style="margin-top:6px"><strong>Oração:</strong> ${d.oracao}</div><div class="actions"><button type="button" data-idx="${idx}" class="shareBtn">Compartilhar</button><button type="button" data-idx="${idx}" class="copyBtn">Copiar</button></div>`;
+      return el;
+    }
+
+    function render(list){
+      grid.innerHTML='';
+      if(!list.length){grid.innerHTML='<p style="grid-column:1/-1;color:var(--muted)">Nenhum devocional encontrado.</p>';return}
+      list.forEach((d,i)=> grid.appendChild(makeCard(d,i)));
+      grid.querySelectorAll('.copyBtn').forEach(btn=> btn.addEventListener('click', e=> copyDev(parseInt(e.currentTarget.dataset.idx))));
+      grid.querySelectorAll('.shareBtn').forEach(btn=> btn.addEventListener('click', e=> shareDev(parseInt(e.currentTarget.dataset.idx))));
+    }
+
+    categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; filterCat.appendChild(opt); });
+
+    function applyFilters(){
+      const qv = q.value.trim().toLowerCase();
+      const cat = filterCat.value;
+      const list = devotionals.filter(d=>{
+        if(cat && d.tag!==cat) return false;
+        if(!qv) return true;
+        return (d.titulo + d.versiculo + d.texto + d.aplicacao + d.oracao + d.tag).toLowerCase().includes(qv);
+      });
+      render(list);
+    }
+
+    q.addEventListener('input', applyFilters);
+    filterCat.addEventListener('change', applyFilters);
+
+    function showToast(msg){ toast.textContent=msg||'Copiado'; toast.style.display='block'; setTimeout(()=> toast.style.display='none',1800); }
+    function copyDev(i){ const d=devotionals[i]; if(!d) return; const txt=`${d.titulo}\n${d.versiculo}\n\n${d.texto}\n\nAplicação: ${d.aplicacao}\nOração: ${d.oracao}`; navigator.clipboard.writeText(txt).then(()=>showToast('Devocional copiado')).catch(()=>showToast('Erro ao copiar')); }
+    function shareDev(i){ const d=devotionals[i]; if(!d) return; const txt=`${d.titulo} — ${d.versiculo}\n\n${d.texto}\n\nAplicação: ${d.aplicacao}\nOração: ${d.oracao}`; try { if(navigator.share){ navigator.share({title:d.titulo,text:txt}).catch(()=>showToast('Partilha cancelada')); } else { navigator.clipboard.writeText(txt).then(()=>showToast('Texto copiado — cole para partilhar')).catch(()=>showToast('Erro ao copiar')); } } catch(e){ showToast('Erro ao partilhar'); } }
+
+    copyAllBtn.addEventListener('click', ()=>{
+      const all = devotionals.map(d=>`${d.titulo} — ${d.versiculo}\n${d.texto}\nAplicação: ${d.aplicacao}\nOração: ${d.oracao}\nTag: ${d.tag}\n\n`).join('');
+      navigator.clipboard.writeText(all).then(()=>showToast('Todos os devocionais copiados')).catch(()=>showToast('Erro ao copiar'));
+    });
+
+    render(devotionals);
+  </script>
+</body>
+</html>

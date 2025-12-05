@@ -1,0 +1,1403 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NOSPLAY — Quiz Bíblico</title>
+<style>
+:root{
+--blue-levels:#0055ff;
+--white:#ffffff;
+--gold:#d4af37;
+--locked-gray:#bdbdbd;
+--correct-green:#00cc44;
+--wrong-red:#ff3333;
+--black-game:#000000;
+}
+html,body{height:100%;margin:0;font-family:Inter,Arial,sans-serif;background:var(--blue-levels);color:var(--white);}
+header{padding:18px 12px;text-align:center;background:var(--blue-levels);}
+header h1{margin:0;color:var(--gold); font-size:32px;font-weight:800;letter-spacing:1px;}
+.screen{display:none;min-height:100vh;padding:18px 14px;box-sizing:border-box;}
+.show{display:block;}
+#levels-screen{background:var(--blue-levels);}
+#grade{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;max-width:1200px;margin:20px auto;}
+.level-card{background:var(--white);color:#0055ff;border-radius:10px;padding:18px 6px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;min-height:100px;transition:transform .12s}
+.level-card:hover{transform:translateY(-6px)}
+.level-num{font-weight:700;font-size:18px;text-align:center;}
+.level-sub{font-size:12px;color:#222;margin-top:6px}
+.level-locked{background:var(--locked-gray);color:#666;cursor:default;opacity:0.9}
+.lock-icon{position:absolute;top:8px;right:10px;font-size:18px;color:#333}
+.btn{background:transparent;border:2px solid var(--white);color:var(--white);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700}
+.btn-red{background:#ff4d4d;color:white;border:none}
+#game-screen{background:var(--black-game);color:var(--white);}
+.game-top{display:flex;justify-content:space-between;align-items:center;gap:12px;max-width:1100px;margin:0 auto 18px;padding:6px}
+.badge{color:var(--gold);font-weight:800}
+#round-indicator{font-weight:700;color:var(--gold);}
+.nav{display:flex;gap:8px}
+#timer{color:var(--gold);font-weight:700}
+#question-box{max-width:1100px;margin:0 auto;padding:10px 6px}
+#question-text{font-size:20px;text-align:center;margin-bottom:10px}
+.options{display:flex;flex-direction:column;align-items:center;gap:24px;margin-top:6px}
+.option{width:92%;border-radius:12px;padding:18px;border:2px solid var(--gold);background:transparent;color:var(--white);font-size:18px;text-align:center;cursor:pointer;transition:all .2s;}
+.option:hover{background:#222}
+footer{position:fixed;left:12px;bottom:12px;color:#fff;opacity:0.85}
+@media(max-width:880px){
+#grade{grid-template-columns:repeat(2,1fr)}
+.option{width:94%}
+}
+@media(max-width:420px){
+header h1{font-size:22px}
+.option{padding:14px;font-size:16px}
+}
+</style>
+</head>
+<body>
+
+<header>
+<h1>NOSPLAY</h1>
+</header>
+
+<main id="levels-screen" class="screen show">
+<div style="max-width:1200px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 6px">
+<div style="font-weight:700;color:var(--white)">Níveis do Quiz</div>
+<div style="display:flex;gap:8px">
+<button class="btn btn-red" id="btn-exit">SAIR</button>
+</div>
+</div>
+<div id="grade"></div>
+</main>
+
+<section id="game-screen" class="screen">
+<div class="game-top">
+<div>
+<div class="badge" id="level-badge">Nível 1</div>
+<div id="round-indicator">Rodada 1/10</div>
+</div>
+<div class="nav">
+<div id="timer">Tempo: <span id="time-left">60</span>s</div>
+<button class="btn" id="btn-home">Home</button>
+<button class="btn" id="btn-music-toggle">Play Music</button>
+</div>
+</div>
+
+<div id="question-box">
+<div id="question-text">Carregando...</div>
+<div class="options" id="options"></div>
+</div>
+</section>
+
+<audio id="music" loop src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
+<audio id="sound-correct" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+<audio id="sound-wrong" src="https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg"></audio>
+
+<footer>Desenvolvido — Nosdeyl Elacum. Todos os direitos reservados.</footer>
+
+<script>
+//----------------------CONFIG------------------------
+const TOTAL_LEVELS=100;
+const ROUNDS_PER_LEVEL=10;
+const TIME_PER_LEVEL=60;
+
+let unlocked=JSON.parse(localStorage.getItem('nosplay_unlocked'))||[1];
+let currentLevel=null,currentRound=0,answersThisLevel=[],timerInterval=null,timeLeft=TIME_PER_LEVEL;
+
+const gradeEl=document.getElementById('grade');
+const levelsScreen=document.getElementById('levels-screen');
+const gameScreen=document.getElementById('game-screen');
+const levelBadge=document.getElementById('level-badge');
+const questionText=document.getElementById('question-text');
+const optionsBox=document.getElementById('options');
+const timeLeftEl=document.getElementById('time-left');
+const roundIndicator=document.getElementById('round-indicator');
+const music=document.getElementById('music');
+const soundCorrect=document.getElementById('sound-correct');
+const soundWrong=document.getElementById('sound-wrong');
+
+//----------------------PERGUNTAS------------------------
+const questionsDB = {
+"1": [
+    {"question":"Quem construiu a arca?","options":["Noé","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Qual foi o filho de Abraão com Sara?","options":["Isaque","Jacó","José","Esaú"],"answerIndex":0},
+    {"question":"Qual rio Deus transformou em sangue no Egito?","options":["Nilo","Jordão","Eufrates","Tibre"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões?","options":["Daniel","Elias","Jonas","Moisés"],"answerIndex":0},
+    {"question":"Quem foi traído por seus irmãos?","options":["José","Esaú","Isaque","Jacó"],"answerIndex":0},
+    {"question":"Quem recebeu os 10 mandamentos?","options":["Moisés","Josué","Davi","Samuel"],"answerIndex":0},
+    {"question":"Quem é conhecido por sua força extraordinária?","options":["Sansão","Saul","Davi","Elias"],"answerIndex":0},
+    {"question":"Quem foi o rei sábio de Israel?","options":["Salomão","Davi","Saul","Ezequiel"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos no Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi engolido por um grande peixe?","options":["Jonas","Elias","Moisés","Davi"],"answerIndex":0}
+  ],
+  "2": [
+    {"question":"Quem foi o primeiro rei de Israel?","options":["Saul","Davi","Salomão","Elias"],"answerIndex":0},
+    {"question":"Quem matou Golias?","options":["Davi","Sansão","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem liderou o povo na travessia do Mar Vermelho?","options":["Moisés","Josué","Abraão","Davi"],"answerIndex":0},
+    {"question":"Quem recebeu uma promessa de Deus para ser pai de muitas nações?","options":["Abraão","Isaque","Jacó","José"],"answerIndex":0},
+    {"question":"Quem foi vendido pelos irmãos e levado ao Egito?","options":["José","Esaú","Davi","Jonas"],"answerIndex":0},
+    {"question":"Quem recebeu sabedoria de Deus para julgar Israel?","options":["Salomão","Davi","Saul","Moisés"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi profeta durante o reinado de Acabe?","options":["Elias","Eliseu","Samuel","Isaías"],"answerIndex":0},
+    {"question":"Quem confrontou os profetas de Baal no Monte Carmelo?","options":["Elias","Moisés","Jonas","Davi"],"answerIndex":0},
+    {"question":"Quem foi liberto do cativeiro por Deus?","options":["Daniel","Elias","José","Sansão"],"answerIndex":0}
+  ],
+  "3": [
+    {"question":"Quem foi o pai de Jacó e Esaú?","options":["Isaque","Abraão","Noé","Jacó"],"answerIndex":0},
+    {"question":"Quem sonhou com a escada que chegava ao céu?","options":["Jacó","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado para ungir reis de Israel?","options":["Samuel","Elias","Josué","Davi"],"answerIndex":0},
+    {"question":"Quem levou os israelitas à Terra Prometida?","options":["Josué","Moisés","Abraão","Davi"],"answerIndex":0},
+    {"question":"Quem era conhecido por sua paciência na Bíblia?","options":["Jó","Noé","Daniel","Abraão"],"answerIndex":0},
+    {"question":"Quem desafiou os magos do Egito?","options":["Moisés","José","Daniel","Elias"],"answerIndex":0},
+    {"question":"Quem foi um dos 12 apóstolos?","options":["Pedro","Paulo","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes?","options":["Pedro","Judas","João","Tiago"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas","Pedro","Tomé","Mateus"],"answerIndex":0}
+  ],
+  "4": [
+    {"question":"Quem foi lançado na fornalha ardente com seus amigos?","options":["Sadraque, Mesaque e Abednego","Daniel","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem subiu ao céu sem morrer?","options":["Elias","Moisés","Enoque","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o primeiro homem criado por Deus?","options":["Adão","Noé","Abraão","Elias"],"answerIndex":0},
+    {"question":"Quem foi a primeira mulher criada?","options":["Eva","Sara","Rebeca","Miriam"],"answerIndex":0},
+    {"question":"Quem recebeu o nome de Israel?","options":["Jacó","Isaque","Abraão","José"],"answerIndex":0},
+    {"question":"Quem vendeu seus irmãos e foi para o Egito?","options":["José","Esaú","Davi","Jonas"],"answerIndex":0},
+    {"question":"Quem foi conhecido por sua fidelidade e coragem?","options":["Daniel","Sansão","Elias","Pedro"],"answerIndex":0},
+    {"question":"Quem foi a mãe de Samuel?","options":["Ana","Sara","Rebeca","Miriam"],"answerIndex":0},
+    {"question":"Quem foi jogado no ventre de um peixe grande?","options":["Jonas","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem disse: 'Deus é meu pastor, nada me faltará'?","options":["Davi","Salomão","Moisés","Elias"],"answerIndex":0}
+  ],
+  "5": [
+    {"question":"Quem construiu o templo em Jerusalém?","options":["Salomão","Davi","Josué","Elias"],"answerIndex":0},
+    {"question":"Quem matou Goliath com uma funda?","options":["Davi","Sansão","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi levado ao céu em um redemoinho?","options":["Elias","Moisés","Enoque","Noé"],"answerIndex":0},
+    {"question":"Quem recebeu a visita do anjo Gabriel anunciando seu nascimento?","options":["Maria","Sara","Eva","Rebeca"],"answerIndex":0},
+    {"question":"Quem batizou Jesus no rio Jordão?","options":["João Batista","Pedro","Paulo","Moisés"],"answerIndex":0},
+    {"question":"Quem é conhecido como o apóstolo dos gentios?","options":["Paulo","Pedro","João","Tiago"],"answerIndex":0},
+    {"question":"Quem foi o rei justo de Israel e filho de Davi?","options":["Salomão","Ezequias","Josias","Elias"],"answerIndex":0},
+    {"question":"Quem foi traído no Getsêmani?","options":["Jesus","Pedro","João","Mateus"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0}
+  ],
+  "6": [
+    {"question":"Quem foi o profeta que chamou fogo do céu?","options":["Elias","Eliseu","Samuel","Isaías"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para a multidão?","options":["Jesus","Moisés","Elias","Pedro"],"answerIndex":0},
+    {"question":"Quem escreveu muitos dos Salmos?","options":["Davi","Salomão","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem teve seu corpo ressuscitado depois de quatro dias?","options":["Lázaro","Jesus","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado em uma prisão por pregar a Palavra?","options":["Pedro","Paulo","João","Tiago"],"answerIndex":0},
+    {"question":"Quem foi escolhido como apóstolo substituto de Judas?","options":["Matias","Paulo","Pedro","João"],"answerIndex":0},
+    {"question":"Quem era conhecido por sua grande fé e cura da filha de Jairo?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem escreveu o Apocalipse?","options":["João","Pedro","Paulo","Mateus"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0}
+  ],
+  "7": [
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas","Pedro","Tomé","Mateus"],"answerIndex":0},
+    {"question":"Quem foi o profeta que enfrentou Acabe e Jezabel?","options":["Elias","Eliseu","Samuel","Isaías"],"answerIndex":0},
+    {"question":"Quem foi conhecido por sua paciência?","options":["Jó","Noé","Daniel","Abraão"],"answerIndex":0},
+    {"question":"Quem recebeu os 10 mandamentos no Monte Sinai?","options":["Moisés","Josué","Davi","Samuel"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos de Nabucodonosor?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi liberto da cova dos leões?","options":["Daniel","Elias","José","Sansão"],"answerIndex":0},
+    {"question":"Quem foi chamado de 'amigo de Deus'?","options":["Abraão","Moisés","Davi","Elias"],"answerIndex":0},
+    {"question":"Quem escreveu Provérbios?","options":["Salomão","Davi","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi jogado em um poço por seus irmãos?","options":["José","Esaú","Davi","Jonas"],"answerIndex":0},
+    {"question":"Quem foi o profeta do arrependimento enviado a Nínive?","options":["Jonas","Daniel","Moisés","Elias"],"answerIndex":0}
+  ],
+  "8": [
+    {"question":"Quem conduziu os israelitas na travessia do Jordão?","options":["Josué","Moisés","Abraão","Davi"],"answerIndex":0},
+    {"question":"Quem foi o profeta sucessor de Elias?","options":["Eliseu","Samuel","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem escreveu grande parte da Lei de Moisés?","options":["Moisés","Davi","Salomão","Elias"],"answerIndex":0},
+    {"question":"Quem foi conhecido por sua força e destruiu o templo dos filisteus?","options":["Sansão","Davi","Elias","José"],"answerIndex":0},
+    {"question":"Quem foi engolido por um peixe grande?","options":["Jonas","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado por Deus ainda menino?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem governou Israel com sabedoria e justiça?","options":["Salomão","Davi","Ezequias","Josias"],"answerIndex":0},
+    {"question":"Quem disse 'Senhor, aumenta a minha fé'?","options":["Tomé","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem era o discípulo que duvidou da ressurreição de Jesus?","options":["Tomé","Pedro","João","Mateus"],"answerIndex":0},
+    {"question":"Quem foi chamado o 'discípulo amado'?","options":["João","Pedro","Paulo","Tiago"],"answerIndex":0}
+  ],
+  "9": [
+    {"question":"Quem pregou para a multidão no Pentecostes?","options":["Pedro","Paulo","João","Mateus"],"answerIndex":0},
+    {"question":"Quem perseguiu os cristãos antes de se converter?","options":["Paulo","Pedro","João","Tomé"],"answerIndex":0},
+    {"question":"Quem foi batizado por João no rio Jordão?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes?","options":["Jesus","Moisés","Elias","Pedro"],"answerIndex":0},
+    {"question":"Quem foi ressuscitado depois de quatro dias?","options":["Lázaro","Jesus","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem disse 'Pai, perdoa-lhes, pois não sabem o que fazem'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi jogado em uma prisão por pregar a palavra?","options":["Pedro","Paulo","João","Tiago"],"answerIndex":0},
+    {"question":"Quem foi escolhido para substituir Judas Iscariotes?","options":["Matias","Paulo","Pedro","João"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem escreveu o Apocalipse?","options":["João","Pedro","Paulo","Mateus"],"answerIndex":0}
+  ],
+  "10": [
+    {"question":"Quem foi o profeta que chamou fogo do céu?","options":["Elias","Eliseu","Samuel","Isaías"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para a multidão?","options":["Jesus","Moisés","Elias","Pedro"],"answerIndex":0},
+    {"question":"Quem escreveu muitos dos Salmos?","options":["Davi","Salomão","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado em prisão por pregar a Palavra de Deus?","options":["Pedro","Paulo","João","Tiago"],"answerIndex":0},
+    {"question":"Quem foi escolhido como apóstolo para substituir Judas?","options":["Matias","Paulo","Pedro","João"],"answerIndex":0},
+    {"question":"Quem curou a filha de Jairo?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem escreveu o Apocalipse?","options":["João","Pedro","Paulo","Mateus"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0}
+  ],
+  "11": [
+    {"question":"Quem sucedeu Elias como profeta em Israel?","options":["Eliseu","Samuel","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Qual rei de Israel foi conhecido por destruir altares de Baal?","options":["Josafá","Davi","Salomão","Ezequias"],"answerIndex":0},
+    {"question":"Qual mulher se tornou rainha e salvou seu povo do extermínio?","options":["Ester","Miriã","Débora","Ana"],"answerIndex":0},
+    {"question":"Quem foi o profeta que repreendeu Acabe e Jezabel?","options":["Elias","Eliseu","Samuel","Isaías"],"answerIndex":0},
+    {"question":"Quem teve seu nome mudado para Israel após lutar com um anjo?","options":["Jacó","Isaque","José","Esaú"],"answerIndex":0},
+    {"question":"Quem escreveu o livro de Lamentações?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem matou o profeta Acabe?","options":["Jeú","Elias","Josafá","Davi"],"answerIndex":0},
+    {"question":"Quem foi o juiz que liderou Israel e derrotou os midianitas com apenas 300 homens?","options":["Gideão","Sansão","Débora","Eli"],"answerIndex":0},
+    {"question":"Qual profeta foi alimentado por corvos no deserto?","options":["Elias","Eliseu","Jeremias","Isaías"],"answerIndex":0},
+    {"question":"Quem foi o filho de Ana, dedicado a Deus desde o nascimento?","options":["Samuel","Saul","Davi","Natã"],"answerIndex":0}
+  ],
+  "12": [
+    {"question":"Quem foi o rei que pediu sabedoria a Deus em vez de riquezas?","options":["Salomão","Davi","Ezequias","Josias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que desafiou os profetas de Baal no Monte Carmelo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o homem justo testado por Deus com grandes perdas e sofrimento?","options":["Jó","Noé","Abraão","Daniel"],"answerIndex":0},
+    {"question":"Qual discípulo andou sobre as águas com Jesus, mas começou a afundar?","options":["Pedro","João","Tiago","Tomé"],"answerIndex":0},
+    {"question":"Quem foi levado ao céu em um redemoinho?","options":["Elias","Enoque","Moisés","Abraão"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos de Nabucodonosor na Babilônia?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Israel ainda jovem, enfrentando o gigante Golias?","options":["Davi","Saul","Salomão","Josafá"],"answerIndex":0},
+    {"question":"Quem foi a mulher profetisa que liderou Israel como juíza?","options":["Débora","Ester","Miriã","Ana"],"answerIndex":0},
+    {"question":"Quem escreveu a maior parte dos Provérbios?","options":["Salomão","Davi","Ezequias","Isaías"],"answerIndex":0},
+    {"question":"Quem foi o profeta que previu a destruição de Nínive?","options":["Jonas","Elias","Isaías","Jeremias"],"answerIndex":0}
+  ],
+  "13": [
+    {"question":"Quem foi vendido por seus irmãos e se tornou governador do Egito?","options":["José","Esaú","Davi","Sansão"],"answerIndex":0},
+    {"question":"Quem teve uma visão de um vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o profeta que confrontou Davi por seu pecado com Bate-Seba?","options":["Natã","Samuel","Elias","Eliseu"],"answerIndex":0},
+    {"question":"Quem libertou os israelitas da escravidão no Egito?","options":["Moisés","Josué","Davi","Abraão"],"answerIndex":0},
+    {"question":"Quem recebeu uma promessa de Deus de que suas descendências seriam como as estrelas do céu?","options":["Abraão","Isaque","Jacó","José"],"answerIndex":0},
+    {"question":"Quem foi o profeta que anunciou a queda de Jerusalém?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi conhecido por sua coragem e matou Golias com uma funda?","options":["Davi","Sansão","Elias","Josué"],"answerIndex":0},
+    {"question":"Quem liderou o povo na travessia do rio Jordão?","options":["Josué","Moisés","Elias","Davi"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado a curar Naamã, o sírio?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o nascimento virginal de Jesus?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0}
+  ],
+  "14": [
+    {"question":"Quem foi jogado na cova dos leões por se recusar a adorar outro deus?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado para ungir Saul como rei?","options":["Samuel","Elias","Eliseu","Natã"],"answerIndex":0},
+    {"question":"Quem escreveu grande parte do livro de Isaías?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem confrontou os profetas de Baal no Monte Carmelo?","options":["Elias","Eliseu","Jeremias","Isaías"],"answerIndex":0},
+    {"question":"Quem foi o profeta que enfrentou Acabe e Jezabel?","options":["Elias","Eliseu","Samuel","Isaías"],"answerIndex":0},
+    {"question":"Quem foi conhecido por sua grande fé e coragem e derrotou os midianitas com 300 homens?","options":["Gideão","Sansão","Davi","Elias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que anunciou a destruição de Nínive?","options":["Jonas","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado por Deus ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0}
+  ],
+  "15": [
+    {"question":"Quem foi o rei sábio que julgou duas mulheres que disputavam um bebê?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar a multidão?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o apóstolo que escreveu o Apocalipse?","options":["João","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem foi o profeta que repreendeu Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi batizado por João no rio Jordão?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado para ungir Davi como rei?","options":["Samuel","Elias","Eliseu","Natã"],"answerIndex":0},
+    {"question":"Quem foi o homem justo testado por Deus com grandes perdas?","options":["Jó","Noé","Abraão","Daniel"],"answerIndex":0}
+  ],
+  "16": [
+    {"question":"Quem teve a visão de um vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem liderou Israel na batalha contra os midianitas com 300 homens?","options":["Gideão","Sansão","Davi","Josué"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a queda de Jerusalém e o exílio babilônico?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o profeta que curou Naamã, o sírio?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o discípulo que andou sobre as águas com Jesus, mas começou a afundar?","options":["Pedro","João","Tiago","Tomé"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar milhares?","options":["Jesus","Moisés","Elias","Pedro"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem profetizou o nascimento virginal de Jesus?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o profeta que repreendeu Davi por seu pecado com Bate-Seba?","options":["Natã","Samuel","Elias","Eliseu"],"answerIndex":0},
+    {"question":"Quem foi o rei que pediu sabedoria em vez de riquezas?","options":["Salomão","Davi","Ezequias","Josias"],"answerIndex":0}
+  ],
+  "17": [
+    {"question":"Quem foi lançado na cova dos leões por não adorar outro deus?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi escolhido para substituir Judas Iscariotes?","options":["Matias","Paulo","Pedro","João"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem escreveu grande parte dos Salmos?","options":["Davi","Salomão","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0}
+  ],
+  "18": [
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem foi o rei que julgou duas mulheres que disputavam um bebê?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que enfrentou Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a queda de Jerusalém e o exílio?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi lançado em prisão por pregar a palavra?","options":["Pedro","Paulo","João","Tiago"],"answerIndex":0},
+    {"question":"Quem curou a filha de Jairo?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem foi o apóstolo que escreveu Apocalipse?","options":["João","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar a multidão?","options":["Jesus","Moisés","Elias","Pedro"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0}
+  ],
+  "19": [
+    {"question":"Quem foi o profeta que confrontou os profetas de Baal no Monte Carmelo?","options":["Elias","Eliseu","Jeremias","Isaías"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem libertou os israelitas da escravidão no Egito?","options":["Moisés","Josué","Davi","Abraão"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o nascimento virginal de Jesus?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Israel ainda jovem, enfrentando Golias?","options":["Davi","Saul","Salomão","Josafá"],"answerIndex":0},
+    {"question":"Quem foi a mulher profetisa e juíza de Israel?","options":["Débora","Ester","Miriã","Ana"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem escreveu a maior parte dos Provérbios?","options":["Salomão","Davi","Ezequias","Isaías"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões por se recusar a adorar outro deus?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a destruição de Nínive?","options":["Jonas","Isaías","Jeremias","Ezequiel"],"answerIndex":0}
+  ],
+  "20": [
+    {"question":"Quem teve visão de ossos secos sendo ressuscitados?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem liderou Israel contra os midianitas com apenas 300 homens?","options":["Gideão","Sansão","Davi","Josué"],"answerIndex":0},
+    {"question":"Quem foi profeta que anunciou a queda de Jerusalém e o exílio babilônico?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o discípulo que duvidou da ressurreição de Jesus?","options":["Tomé","Pedro","João","Mateus"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar milhares?","options":["Jesus","Moisés","Elias","Pedro"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0}
+  ],
+  "21": [
+    {"question":"Quem foi o profeta que viu Deus no templo, rodeado por serafins?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem destruiu Jericó com a trombeta e marchas do povo?","options":["Josué","Moisés","Gideão","Davi"],"answerIndex":0},
+    {"question":"Quem foi o homem que construiu o altar em Betel após o sonho da escada para o céu?","options":["Jacó","Abraão","José","Isaque"],"answerIndex":0},
+    {"question":"Quem desobedeceu à ordem de Deus de destruir tudo em Ai?","options":["Acã","Josué","Davi","Sansão"],"answerIndex":0},
+    {"question":"Quem foi o profeta que comeu um livro que Deus lhe deu?","options":["Ezequiel","Jeremias","Isaías","Daniel"],"answerIndex":0},
+    {"question":"Quem foi conhecido como o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas Iscariotes","Pedro","Tomé","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o rei que tocou harpa para acalmar Saul?","options":["Davi","Salomão","Josafá","Ezequias"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente, mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0}
+  ],
+  "22": [
+    {"question":"Quem foi o profeta que viu o vale de ossos secos ressuscitando?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o rei que teve um sonho com uma estátua de diversos metais?","options":["Nabucodonosor","Davi","Salomão","Ezequias"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Judá ainda criança?","options":["Josias","Ezequias","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem foi a mãe de Samuel, dedicada ao serviço de Deus desde cedo?","options":["Ana","Miriã","Débora","Sara"],"answerIndex":0},
+    {"question":"Quem foi o profeta que confrontou Acabe e repreendeu a idolatria em Israel?","options":["Elias","Eliseu","Jeremias","Isaías"],"answerIndex":0},
+    {"question":"Quem profetizou que Jesus nasceria em Belém?","options":["Miqueias","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o rei que construiu o Templo em Jerusalém?","options":["Salomão","Davi","Ezequias","Josias"],"answerIndex":0},
+    {"question":"Quem cortou os cabelos de Sansão, tirando sua força?","options":["Dalila","Débora","Miriã","Raquel"],"answerIndex":0},
+    {"question":"Quem teve uma visão do livro sendo comido, tornando-se doce na boca, mas amargo no estômago?","options":["Ezequiel","Jeremias","Isaías","Daniel"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o cativeiro na Babilônia e o retorno a Jerusalém?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0}
+  ],
+  "23": [
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem interpretou o sonho da estátua com cabeça de ouro?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi o rei que pediu sabedoria para governar Israel?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar milhares de pessoas?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, seguindo a instrução do profeta?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi jogado no fogo ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o apóstolo que escreveu Apocalipse?","options":["João","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes por pregar a palavra?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem foi o discípulo que duvidou da ressurreição e precisou tocar nas feridas de Jesus?","options":["Tomé","Pedro","João","Mateus"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o nascimento virginal de Jesus?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0}
+  ],
+  "24": [
+    {"question":"Quem foi o homem mais velho da Bíblia, vivendo 969 anos?","options":["Matusalém","Noé","Abraão","Jarede"],"answerIndex":0},
+    {"question":"Quem foi o primeiro martir cristão registrado no Novo Testamento?","options":["Estêvão","Tiago","Pedro","Paulo"],"answerIndex":0},
+    {"question":"Quem foi levado ao céu sem passar pela morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes no Novo Testamento?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem conduziu Israel na travessia do Mar Vermelho?","options":["Moisés","Josué","Davi","Sansão"],"answerIndex":0},
+    {"question":"Quem foi o profeta que repreendeu Davi por seu pecado com Bate-Seba?","options":["Natã","Samuel","Elias","Eliseu"],"answerIndex":0},
+    {"question":"Quem teve o nome mudado para Israel depois de lutar com um anjo?","options":["Jacó","Isaque","José","Esaú"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi vendido pelos irmãos e levado ao Egito?","options":["José","Esaú","Davi","Jonas"],"answerIndex":0},
+    {"question":"Quem teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0}
+  ],
+  "25": [
+    {"question":"Quem foi profeta durante o reinado de Acabe?","options":["Elias","Eliseu","Samuel","Isaías"],"answerIndex":0},
+    {"question":"Quem foi o profeta que confrontou os profetas de Baal no Monte Carmelo?","options":["Elias","Moisés","Jonas","Davi"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi liberto do cativeiro por Deus?","options":["Daniel","Elias","José","Sansão"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para alimentar milhares de pessoas?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi batizado no rio Jordão?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem escreveu a maior parte dos Salmos?","options":["Davi","Salomão","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para a multidão?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0}
+  ],
+  "26": [
+    {"question":"Quem foi o profeta que repreendeu Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o discípulo que duvidou da ressurreição e precisou tocar nas feridas de Jesus?","options":["Tomé","Pedro","João","Mateus"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem foi o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem teve visão de ossos secos sendo ressuscitados?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Israel ainda jovem, enfrentando Golias?","options":["Davi","Saul","Salomão","Josafá"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o nascimento virginal de Jesus?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0}
+  ],
+  "27": [
+    {"question":"Quem foi lançado em prisão por pregar a palavra?","options":["Pedro","Paulo","João","Tiago"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem escreveu grande parte do livro de Isaías?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar a multidão?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi escolhido para substituir Judas Iscariotes?","options":["Matias","Paulo","Pedro","João"],"answerIndex":0},
+    {"question":"Quem foi o primeiro martir cristão registrado no Novo Testamento?","options":["Estêvão","Tiago","Pedro","Paulo"],"answerIndex":0},
+    {"question":"Quem foi o homem mais velho da Bíblia, vivendo 969 anos?","options":["Matusalém","Noé","Abraão","Jarede"],"answerIndex":0}
+  ],
+  "28": [
+    {"question":"Quem profetizou que Jesus nasceria em Belém?","options":["Miqueias","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente, mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para a multidão?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o cativeiro na Babilônia e o retorno a Jerusalém?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem destruiu Jericó com a trombeta e marchas do povo?","options":["Josué","Moisés","Gideão","Davi"],"answerIndex":0},
+    {"question":"Quem foi o homem que construiu o altar em Betel após o sonho da escada para o céu?","options":["Jacó","Abraão","José","Isaque"],"answerIndex":0},
+    {"question":"Quem desobedeceu à ordem de Deus de destruir tudo em Ai?","options":["Acã","Josué","Davi","Sansão"],"answerIndex":0},
+    {"question":"Quem foi o profeta que comeu um livro que Deus lhe deu?","options":["Ezequiel","Jeremias","Isaías","Daniel"],"answerIndex":0}
+  ],
+  "29": [
+    {"question":"Quem foi conhecido como o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas Iscariotes","Pedro","Tomé","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o rei que tocou harpa para acalmar Saul?","options":["Davi","Salomão","Josafá","Ezequias"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0}
+  ],
+  "30": [
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem foi o rei que julgou duas mulheres que disputavam um bebê?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que enfrentou Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a queda de Jerusalém e o exílio?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi lançado em prisão por pregar a palavra?","options":["Pedro","Paulo","João","Tiago"],"answerIndex":0},
+    {"question":"Quem curou a filha de Jairo?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem foi o apóstolo que escreveu Apocalipse?","options":["João","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar a multidão?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0}
+  ],
+  "31": [
+    {"question":"Quem foi o profeta que teve uma visão de Deus no carro de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que curou Naamã, o sírio?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o rei que derrubou os muros de Jerusalém e salvou o povo com oração?","options":["Ezequias","Josias","Davi","Salomão"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor na Babilônia?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi o profeta que denunciou a idolatria de Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar milhares?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o nascimento virginal de Jesus?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem passar pela morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi escolhido para substituir Judas Iscariotes?","options":["Matias","Paulo","Pedro","João"],"answerIndex":0}
+  ],
+  "32": [
+    {"question":"Quem foi o profeta que viu ossos secos ressuscitando?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o rei que pediu sabedoria em vez de riquezas?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem curou a filha de Jairo?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem foi o apóstolo que escreveu Apocalipse?","options":["João","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para a multidão?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem foi o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas Iscariotes","Pedro","Tomé","João"],"answerIndex":0}
+  ],
+  "33": [
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para alimentar milhares de pessoas?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi vendido pelos irmãos e levado ao Egito?","options":["José","Esaú","Davi","Jonas"],"answerIndex":0},
+    {"question":"Quem foi o rei que tocou harpa para acalmar Saul?","options":["Davi","Salomão","Josafá","Ezequias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que repreendeu Davi por seu pecado com Bate-Seba?","options":["Natã","Samuel","Elias","Eliseu"],"answerIndex":0},
+    {"question":"Quem teve o nome mudado para Israel depois de lutar com um anjo?","options":["Jacó","Isaque","José","Esaú"],"answerIndex":0},
+    {"question":"Quem conduziu Israel na travessia do Mar Vermelho?","options":["Moisés","Josué","Davi","Sansão"],"answerIndex":0}
+  ],
+  "34": [
+    {"question":"Quem foi o profeta que confrontou os profetas de Baal no Monte Carmelo?","options":["Elias","Eliseu","Jeremias","Isaías"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a destruição de Nínive?","options":["Jonas","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi a mulher profetisa e juíza de Israel?","options":["Débora","Ester","Miriã","Ana"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Israel ainda jovem, enfrentando Golias?","options":["Davi","Saul","Salomão","Josafá"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem escreveu a maior parte dos Provérbios?","options":["Salomão","Davi","Ezequias","Isaías"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem foi o discípulo que duvidou da ressurreição e precisou tocar nas feridas de Jesus?","options":["Tomé","Pedro","João","Mateus"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0}
+  ],
+  "35": [
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem foi o rei que julgou duas mulheres que disputavam um bebê?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar a multidão?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o cativeiro na Babilônia e o retorno a Jerusalém?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0}
+  ],
+  "36": [
+    {"question":"Quem destruiu Jericó com a trombeta e marchas do povo?","options":["Josué","Moisés","Gideão","Davi"],"answerIndex":0},
+    {"question":"Quem foi o homem que construiu o altar em Betel após o sonho da escada para o céu?","options":["Jacó","Abraão","José","Isaque"],"answerIndex":0},
+    {"question":"Quem desobedeceu à ordem de Deus de destruir tudo em Ai?","options":["Acã","Josué","Davi","Sansão"],"answerIndex":0},
+    {"question":"Quem foi o profeta que comeu um livro que Deus lhe deu?","options":["Ezequiel","Jeremias","Isaías","Daniel"],"answerIndex":0},
+    {"question":"Quem foi conhecido como o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas Iscariotes","Pedro","Tomé","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o rei que tocou harpa para acalmar Saul?","options":["Davi","Salomão","Josafá","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0}
+  ],
+  "37": [
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem foi o rei que julgou duas mulheres que disputavam um bebê?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar a multidão?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0}
+  ],
+  "38": [
+    {"question":"Quem profetizou sobre o cativeiro na Babilônia e o retorno a Jerusalém?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem destruiu Jericó com a trombeta e marchas do povo?","options":["Josué","Moisés","Gideão","Davi"],"answerIndex":0},
+    {"question":"Quem foi o homem que construiu o altar em Betel após o sonho da escada para o céu?","options":["Jacó","Abraão","José","Isaque"],"answerIndex":0},
+    {"question":"Quem desobedeceu à ordem de Deus de destruir tudo em Ai?","options":["Acã","Josué","Davi","Sansão"],"answerIndex":0},
+    {"question":"Quem foi o profeta que comeu um livro que Deus lhe deu?","options":["Ezequiel","Jeremias","Isaías","Daniel"],"answerIndex":0},
+    {"question":"Quem foi conhecido como o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas Iscariotes","Pedro","Tomé","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o rei que tocou harpa para acalmar Saul?","options":["Davi","Salomão","Josafá","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0}
+  ],
+  "39": [
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem foi o rei que julgou duas mulheres que disputavam um bebê?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar a multidão?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0}
+  ],
+  "40": [
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o cativeiro na Babilônia e o retorno a Jerusalém?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem destruiu Jericó com a trombeta e marchas do povo?","options":["Josué","Moisés","Gideão","Davi"],"answerIndex":0},
+    {"question":"Quem foi o homem que construiu o altar em Betel após o sonho da escada para o céu?","options":["Jacó","Abraão","José","Isaque"],"answerIndex":0},
+    {"question":"Quem desobedeceu à ordem de Deus de destruir tudo em Ai?","options":["Acã","Josué","Davi","Sansão"],"answerIndex":0},
+    {"question":"Quem foi o profeta que comeu um livro que Deus lhe deu?","options":["Ezequiel","Jeremias","Isaías","Daniel"],"answerIndex":0},
+    {"question":"Quem foi conhecido como o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas Iscariotes","Pedro","Tomé","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o rei que tocou harpa para acalmar Saul?","options":["Davi","Salomão","Josafá","Ezequias"],"answerIndex":0}
+  ],
+  "41": [
+    {"question":"Quem profetizou o cativeiro da Babilônia e a restauração de Israel?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o profeta que denunciou a idolatria de Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar milhares?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o nascimento virginal de Jesus?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem passar pela morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem destruiu Jericó com a trombeta e marchas do povo?","options":["Josué","Moisés","Gideão","Davi"],"answerIndex":0},
+    {"question":"Quem teve o nome mudado para Israel depois de lutar com um anjo?","options":["Jacó","Isaque","José","Esaú"],"answerIndex":0}
+  ],
+  "42": [
+    {"question":"Quem foi o primeiro martir cristão registrado no Novo Testamento?","options":["Estêvão","Tiago","Pedro","Paulo"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Israel ainda jovem, enfrentando Golias?","options":["Davi","Saul","Salomão","Josafá"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a queda de Jerusalém e o exílio?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi vendido pelos irmãos e levado ao Egito?","options":["José","Esaú","Davi","Jonas"],"answerIndex":0}
+  ],
+  "43": [
+    {"question":"Quem foi profeta durante o reinado de Acabe?","options":["Elias","Eliseu","Samuel","Isaías"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o rei que tocou harpa para acalmar Saul?","options":["Davi","Salomão","Josafá","Ezequias"],"answerIndex":0},
+    {"question":"Quem teve visão de ossos secos sendo ressuscitados?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a destruição de Nínive?","options":["Jonas","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi a mulher profetisa e juíza de Israel?","options":["Débora","Ester","Miriã","Ana"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem escreveu a maior parte dos Provérbios?","options":["Salomão","Davi","Ezequias","Isaías"],"answerIndex":0},
+    {"question":"Quem foi lançado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o discípulo que duvidou da ressurreição e precisou tocar nas feridas de Jesus?","options":["Tomé","Pedro","João","Mateus"],"answerIndex":0}
+  ],
+  "44": [
+    {"question":"Quem multiplicou pães e peixes para alimentar a multidão?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas Iscariotes","Pedro","Tomé","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0}
+  ],
+  "45": [
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem foi o rei que julgou duas mulheres que disputavam um bebê?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o cativeiro na Babilônia e o retorno a Jerusalém?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem destruiu Jericó com a trombeta e marchas do povo?","options":["Josué","Moisés","Gideão","Davi"],"answerIndex":0},
+    {"question":"Quem foi o homem que construiu o altar em Betel após o sonho da escada para o céu?","options":["Jacó","Abraão","José","Isaque"],"answerIndex":0},
+    {"question":"Quem desobedeceu à ordem de Deus de destruir tudo em Ai?","options":["Acã","Josué","Davi","Sansão"],"answerIndex":0}
+  ],
+  "46": [
+    {"question":"Quem foi o profeta que comeu um livro que Deus lhe deu?","options":["Ezequiel","Jeremias","Isaías","Daniel"],"answerIndex":0},
+    {"question":"Quem foi conhecido como o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas Iscariotes","Pedro","Tomé","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o rei que tocou harpa para acalmar Saul?","options":["Davi","Salomão","Josafá","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0}
+  ],
+  "47": [
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem foi o rei que julgou duas mulheres que disputavam um bebê?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o cativeiro na Babilônia e o retorno a Jerusalém?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem destruiu Jericó com a trombeta e marchas do povo?","options":["Josué","Moisés","Gideão","Davi"],"answerIndex":0},
+    {"question":"Quem foi o homem que construiu o altar em Betel após o sonho da escada para o céu?","options":["Jacó","Abraão","José","Isaque"],"answerIndex":0},
+    {"question":"Quem desobedeceu à ordem de Deus de destruir tudo em Ai?","options":["Acã","Josué","Davi","Sansão"],"answerIndex":0}
+  ],
+  "48": [
+    {"question":"Quem foi o profeta que comeu um livro que Deus lhe deu?","options":["Ezequiel","Jeremias","Isaías","Daniel"],"answerIndex":0},
+    {"question":"Quem foi conhecido como o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas Iscariotes","Pedro","Tomé","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o rei que tocou harpa para acalmar Saul?","options":["Davi","Salomão","Josafá","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0}
+  ],
+  "49": [
+    {"question":"Quem foi elevado ao céu sem experimentar a morte?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem foi o rei que julgou duas mulheres que disputavam um bebê?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o cativeiro na Babilônia e o retorno a Jerusalém?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem destruiu Jericó com a trombeta e marchas do povo?","options":["Josué","Moisés","Gideão","Davi"],"answerIndex":0},
+    {"question":"Quem foi o homem que construiu o altar em Betel após o sonho da escada para o céu?","options":["Jacó","Abraão","José","Isaque"],"answerIndex":0},
+    {"question":"Quem desobedeceu à ordem de Deus de destruir tudo em Ai?","options":["Acã","Josué","Davi","Sansão"],"answerIndex":0}
+  ],
+  "50": [
+    {"question":"Quem foi o profeta que comeu um livro que Deus lhe deu?","options":["Ezequiel","Jeremias","Isaías","Daniel"],"answerIndex":0},
+    {"question":"Quem foi conhecido como o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem traiu Jesus por 30 moedas de prata?","options":["Judas Iscariotes","Pedro","Tomé","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o rei que tocou harpa para acalmar Saul?","options":["Davi","Salomão","Josafá","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0}
+  ],
+  "51": [
+    {"question":"Quem foi o profeta que profetizou contra os reis de Israel e Judá, incluindo Acabe?","options":["Elias","Eliseu","Jeremias","Isaías"],"answerIndex":0},
+    {"question":"Quem foi o profeta que realizou o milagre da multiplicação do azeite da viúva?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do rei Nabucodonosor e recebeu posição de autoridade na Babilônia?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi lançado no forno ardente, mas saiu sem ferimentos?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o retorno dos judeus do exílio na Babilônia?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar cinco mil homens, além de mulheres e crianças?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":1},
+    {"question":"Quem foi ungido rei de Judá com apenas oito anos de idade e fez reformas religiosas?","options":["Josias","Ezequias","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem escreveu grande parte do livro de Provérbios?","options":["Salomão","Davi","Ezequias","Isaías"],"answerIndex":0}
+  ],
+  "52": [
+    {"question":"Quem interpretou a parábola do semeador e explicou seu significado aos discípulos?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que confrontou Acabe no Monte Carmelo?","options":["Elias","Eliseu","Jeremias","Isaías"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva e depois ressuscitou seu filho?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a queda da cidade de Nínive?","options":["Jonas","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o comandante sírio, da lepra?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor e seus conselheiros?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu sem ferimentos?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar milhares de pessoas duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve a visão de ossos secos e da restauração de Israel?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0}
+  ],
+  "53": [
+    {"question":"Quem foi o profeta que denunciou a idolatria de Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou a filha de Jairo?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem curou o servo do centurião à distância?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem batizou Jesus no rio Jordão?","options":["João Batista","Pedro","Tiago","Paulo"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi jogado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a destruição de Jerusalém e o exílio na Babilônia?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0}
+  ],
+  "54": [
+    {"question":"Quem foi o homem que construiu o altar em Betel após o sonho da escada para o céu?","options":["Jacó","Abraão","José","Isaque"],"answerIndex":0},
+    {"question":"Quem desobedeceu à ordem de Deus de destruir tudo em Ai?","options":["Acã","Josué","Davi","Sansão"],"answerIndex":0},
+    {"question":"Quem foi conhecido como o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem foi o profeta que teve visão de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi vendido pelos irmãos e levado ao Egito?","options":["José","Esaú","Davi","Jonas"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0}
+  ],
+  "55": [
+    {"question":"Quem foi ungido rei de Israel ainda jovem e derrotou Golias?","options":["Davi","Saul","Salomão","Josafá"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens, além de mulheres e crianças?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0}
+  ],
+  "56": [
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o retorno do povo judeu do exílio?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem confrontou Acabe no Monte Carmelo?","options":["Elias","Eliseu","Jeremias","Isaías"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem teve visão de ossos secos sendo ressuscitados?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0}
+  ],
+  "57": [
+    {"question":"Quem foi o homem mais paciente da Bíblia?","options":["Jó","Abraão","Moisés","Davi"],"answerIndex":0},
+    {"question":"Quem foi vendido pelos irmãos e levado ao Egito?","options":["José","Esaú","Davi","Jonas"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para milhares de pessoas?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0}
+  ],
+  "58": [
+    {"question":"Quem foi o profeta que teve a visão do carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a queda de Nínive?","options":["Jonas","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi lançado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0}
+  ],
+  "59": [
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a restauração de Israel após o cativeiro na Babilônia?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o profeta que denunciou a idolatria de Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou a filha de Jairo?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem curou o servo do centurião à distância?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem batizou Jesus no rio Jordão?","options":["João Batista","Pedro","Tiago","Paulo"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0}
+  ],
+  "60": [
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu sem ferimentos?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi vendido pelos irmãos e levado ao Egito?","options":["José","Esaú","Davi","Jonas"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a levar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi o profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0}
+  ],
+  "61": [
+    {"question":"Quem foi o profeta que fez o machado flutuar em 2 Reis 6?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi profeta durante o reinado de Josias e advertiu contra a idolatria?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o nascimento de Jesus em Belém?","options":["Miquéias","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi o profeta que interpretou o sonho da estátua de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem desafiou os profetas de Baal no Monte Carmelo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para alimentar a multidão de quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Naim?","options":["Jesus","Eliseu","Pedro","Paulo"],"answerIndex":0},
+    {"question":"Quem recebeu a visão do vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem era o rei justo que fez reformas e derrubou altares pagãos?","options":["Ezequias","Josias","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem foi vendido pelos irmãos e tornou-se governador do Egito?","options":["José","Esaú","Jacó","Moisés"],"answerIndex":0}
+  ],
+  "62": [
+    {"question":"Quem interpretou o sonho do faraó sobre sete vacas gordas e sete vacas magras?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem desobedeceu a ordem de Deus e foi punido com a morte?","options":["Acã","Saul","Davi","Sansão"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva de Sarepta?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem foi engolido por um grande peixe?","options":["Jonas","Moisés","Elias","Daniel"],"answerIndex":0},
+    {"question":"Quem profetizou contra o rei Acaz e previu o Emanuel?","options":["Isaías","Jeremias","Miquéias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens, além de mulheres e crianças?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0}
+  ],
+  "63": [
+    {"question":"Quem foi o profeta que viu o carro de fogo e cavalos de fogo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou azeite da viúva de Sarepta?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a queda de Nínive?","options":["Jonas","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi lançado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem foi decapitado por Herodes?","options":["João Batista","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem foi profeta ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0}
+  ],
+  "64": [
+    {"question":"Quem multiplicou pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Naim?","options":["Jesus","Eliseu","Pedro","Paulo"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a restauração de Israel?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Israel e derrotou Golias?","options":["Davi","Saul","Salomão","Josafá"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0}
+  ],
+  "65": [
+    {"question":"Quem multiplicou pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Naim?","options":["Jesus","Eliseu","Pedro","Paulo"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a restauração de Israel?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Israel e derrotou Golias?","options":["Davi","Saul","Salomão","Josafá"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0}
+  ],
+  "66": [
+    {"question":"Quem curou a sogra de Pedro?","options":["Jesus","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem expulsou os demônios em Gadara?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0}
+  ],
+  "67": [
+    {"question":"Quem foi lançado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Naim?","options":["Jesus","Eliseu","Pedro","Paulo"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a queda de Jerusalém?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Israel ainda jovem?","options":["Davi","Saul","Salomão","Josafá"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0}
+  ],
+  "68": [
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu sem ferimentos?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0}
+  ],
+  "69": [
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem teve visão do vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Judá ainda criança e fez reformas religiosas?","options":["Josias","Ezequias","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede do rei Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0}
+  ],
+  "70": [
+    {"question":"Quem ressuscitou o filho da viúva de Naim?","options":["Jesus","Eliseu","Pedro","Paulo"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a restauração de Israel após o exílio?","options":["Jeremias","Isaías","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0}
+  ],
+  "71": [
+    {"question":"Quem interpretou o sonho da estátua de Nabucodonosor com cabeça de ouro?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que viu o carro de fogo e cavalos de fogo levar Elias?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva de Sarepta?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a destruição de Nínive?","options":["Jonas","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi lançado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0}
+  ],
+  "72": [
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi profeta ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem teve visão do vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Judá ainda criança e fez reformas religiosas?","options":["Josias","Ezequias","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0}
+  ],
+  "73": [
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu sem ferimentos?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0}
+  ],
+  "74": [
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem teve visão do vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Judá ainda criança e fez reformas religiosas?","options":["Josias","Ezequias","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Naim?","options":["Jesus","Eliseu","Pedro","Paulo"],"answerIndex":0}
+  ],
+  "75": [
+    {"question":"Quem interpretou o sonho da estátua de Nabucodonosor com cabeça de ouro?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que viu o carro de fogo levar Elias?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva de Sarepta?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a destruição de Nínive?","options":["Jonas","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi lançado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0}
+  ],
+  "76": [
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi profeta ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem teve visão do vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Judá ainda criança e fez reformas religiosas?","options":["Josias","Ezequias","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0}
+  ],
+  "77": [
+    {"question":"Quem interpretou sonhos do faraó do Egito?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu sem ferimentos?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi profeta chamado ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0}
+  ],
+  "78": [
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem teve visão do vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Judá ainda criança e fez reformas religiosas?","options":["Josias","Ezequias","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes duas vezes?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi lançado na cova dos leões e sobreviveu?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Naim?","options":["Jesus","Eliseu","Pedro","Paulo"],"answerIndex":0}
+  ],
+  "79": [
+    {"question":"Quem interpretou o sonho da estátua de Nabucodonosor com cabeça de ouro?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que viu o carro de fogo levar Elias?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva de Sarepta?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a destruição de Nínive?","options":["Jonas","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi lançado no forno ardente mas saiu ileso?","options":["Sadraque","Mesaque","Abednego","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0}
+  ],
+  "80": [
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi profeta ainda menino no templo?","options":["Samuel","Jeremias","Isaías","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem teve visão do vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi ungido rei de Judá ainda criança e fez reformas religiosas?","options":["Josias","Ezequias","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0}
+  ],
+  "81": [
+    {"question":"Quem interpretou o sonho da vaca magra e gorda do faraó?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi escolhido por Deus para derrubar Jericó?","options":["Josué","Calebe","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem tocou as águas do Jordão e elas se abriram?","options":["Josué","Moisés","Elias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi o profeta que denunciou o rei Acabe e a rainha Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva em Serepta?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem confrontou os profetas de Baal no Monte Carmelo?","options":["Elias","Moisés","Jonas","Davi"],"answerIndex":0},
+    {"question":"Quem teve uma visão de um anjo sobre a queda de Babilônia?","options":["Daniel","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem ajudou Ester a salvar os judeus?","options":["Mardoqueu","Daniel","Esdras","Neemias"],"answerIndex":0},
+    {"question":"Quem interpretou os sonhos do rei Nabucodonosor sobre a árvore gigante?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0}
+  ],
+  "82": [
+    {"question":"Quem foi o profeta que viu a glória de Deus no Templo e profetizou sobre a restauração de Israel?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi chamado de homem segundo o coração de Deus?","options":["Davi","Salomão","Moisés","Josué"],"answerIndex":0},
+    {"question":"Quem teve sua boca fechada por Deus até o tempo certo?","options":["Zacarias","Elias","João Batista","Jeremias"],"answerIndex":0},
+    {"question":"Quem escreveu os Salmos?","options":["Davi","Salomão","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem interpretou a escritura na parede do rei Belsazar?","options":["Daniel","José","Moisés","Ezequiel"],"answerIndex":0},
+    {"question":"Quem liderou o povo na reconstrução do muro de Jerusalém?","options":["Neemias","Esdras","Josué","Mardoqueu"],"answerIndex":0},
+    {"question":"Quem recebeu as tábuas da Lei no Monte Sinai?","options":["Moisés","Josué","Abraão","Davi"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o Messias nascido de uma virgem?","options":["Isaías","Jeremias","Daniel","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi engolido por um grande peixe por desobedecer a Deus?","options":["Jonas","Elias","Daniel","Moisés"],"answerIndex":0},
+    {"question":"Quem foi o primeiro mártir cristão?","options":["Estevão","Tiago","Pedro","Paulo"],"answerIndex":0}
+  ],
+  "83": [
+    {"question":"Quem foi chamado por Deus ainda no ventre materno?","options":["Jeremias","Isaías","Moisés","Samuel"],"answerIndex":0},
+    {"question":"Quem teve a visão de uma grande tribulação e das setenta semanas?","options":["Daniel","Ezequiel","Jeremias","Isaías"],"answerIndex":0},
+    {"question":"Quem construiu a arca para sobreviver ao dilúvio?","options":["Noé","Abraão","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o último juiz de Israel antes da monarquia?","options":["Samuel","Sansão","Elias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó sobre vacas e espigas?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi traído e vendido por seus irmãos e levado ao Egito?","options":["José","Jacó","Esaú","Isaque"],"answerIndex":0},
+    {"question":"Quem foi o rei sábio que escreveu Provérbios e Eclesiastes?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem tocou o manto de Eliseu e ressuscitou o filho da sunamita?","options":["Eliseu","Elias","Daniel","Moisés"],"answerIndex":0},
+    {"question":"Quem recebeu uma visão de Deus em forma de trono e rodas vivas?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi alimentado por corvos durante uma seca?","options":["Elias","Eliseu","Moisés","Daniel"],"answerIndex":0}
+  ],
+  "84": [
+    {"question":"Quem foi o profeta que previu a queda de Jerusalém para os babilônios?","options":["Jeremias","Ezequiel","Isaías","Daniel"],"answerIndex":0},
+    {"question":"Quem foi batizado por João Batista no rio Jordão?","options":["Jesus","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem escreveu a carta aos Romanos?","options":["Paulo","Pedro","João","Tiago"],"answerIndex":0},
+    {"question":"Quem foi o primeiro rei de Israel ungido por Samuel?","options":["Saul","Davi","Salomão","Josué"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem derrubou os muros de Jericó com trombetas e gritos?","options":["Josué","Calebe","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem teve sua mão desfigurada por tocar o Santo na visão de Ezequiel?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o profeta que ungiu Saul e Davi?","options":["Samuel","Elias","Eliseu","Isaías"],"answerIndex":0},
+    {"question":"Quem foi elevado em um redemoinho de fogo?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem foi ressuscitado por Jesus em Betânia?","options":["Lázaro","Jairo","Filho da viúva","Filho do centurião"],"answerIndex":0}
+  ],
+  "85": [
+    {"question":"Quem foi o jovem que interpretou a escrita na parede de Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem curou o cego de nascença em Jerusalém?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi o profeta que profetizou sobre a vinda do Messias em Belém?","options":["Miquéias","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem recebeu os Dez Mandamentos de Deus?","options":["Moisés","Josué","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem foi o discípulo conhecido por duvidar da ressurreição?","options":["Tomé","Pedro","João","Tiago"],"answerIndex":0},
+    {"question":"Quem foi a mulher que ungiu Jesus com perfume caro?","options":["Maria","Marta","Joana","Salomé"],"answerIndex":0},
+    {"question":"Quem foi levado ao céu em uma carruagem de fogo?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a restauração de Israel após o cativeiro?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem escreveu o Apocalipse?","options":["João","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0}
+  ],
+  "86": [
+    {"question":"Quem foi alimentado por um anjo no deserto durante quarenta dias?","options":["Elias","Moisés","Daniel","João Batista"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o rei que pediu sabedoria a Deus?","options":["Salomão","Davi","Ezequias","Josias"],"answerIndex":0},
+    {"question":"Quem foi engolido por um grande peixe por desobedecer a Deus?","options":["Jonas","Elias","Daniel","Moisés"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o servo sofredor?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o jovem que sobreviveu à cova dos leões?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva em Serepta?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem ajudou Ester a salvar os judeus?","options":["Mardoqueu","Daniel","Esdras","Neemias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do rei Nabucodonosor sobre a estátua gigante?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0}
+  ],
+  "87": [
+    {"question":"Quem profetizou sobre o vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o último juiz de Israel antes da monarquia?","options":["Samuel","Sansão","Elias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi o profeta que denunciou Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem recebeu os Dez Mandamentos?","options":["Moisés","Josué","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi traído e vendido pelos irmãos?","options":["José","Jacó","Esaú","Isaque"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem foi ungido rei por Samuel ainda jovem?","options":["Davi","Saul","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a vinda do Messias em Belém?","options":["Miquéias","Isaías","Jeremias","Ezequiel"],"answerIndex":0}
+  ],
+  "88": [
+    {"question":"Quem multiplicou os pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi batizado por João Batista no rio Jordão?","options":["Jesus","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos de Nabucodonosor?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem foi elevado em um redemoinho de fogo?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0}
+  ],
+  "89": [
+    {"question":"Quem profetizou sobre a restauração de Israel após o cativeiro?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem escreveu o Apocalipse?","options":["João","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi alimentado por um anjo no deserto durante quarenta dias?","options":["Elias","Moisés","Daniel","João Batista"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o rei que pediu sabedoria a Deus?","options":["Salomão","Davi","Ezequias","Josias"],"answerIndex":0},
+    {"question":"Quem foi engolido por um grande peixe por desobedecer a Deus?","options":["Jonas","Elias","Daniel","Moisés"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o servo sofredor?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o jovem que sobreviveu à cova dos leões?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva em Serepta?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0}
+  ],
+  "90": [
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem ajudou Ester a salvar os judeus?","options":["Mardoqueu","Daniel","Esdras","Neemias"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do rei Nabucodonosor sobre a estátua gigante?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi o último juiz de Israel antes da monarquia?","options":["Samuel","Sansão","Elias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem foi o profeta que denunciou Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem recebeu os Dez Mandamentos?","options":["Moisés","Josué","Salomão","Davi"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi traído e vendido pelos irmãos?","options":["José","Jacó","Esaú","Isaque"],"answerIndex":0}
+  ],
+  "91": [
+    {"question":"Quem profetizou sobre o cativeiro babilônico de Israel?","options":["Jeremias","Ezequiel","Isaías","Daniel"],"answerIndex":0},
+    {"question":"Quem viu a visão da mão escrevendo na parede durante o reinado de Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem desafiou Acabe e os profetas de Baal no Monte Carmelo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi alimentado por corvos durante uma seca?","options":["Elias","Eliseu","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ungiu Davi como rei de Israel?","options":["Samuel","Elias","Eliseu","Isaías"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o nascimento do Messias em Belém?","options":["Miquéias","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da sunamita?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o servo sofredor?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem sobreviveu à cova dos leões?","options":["Daniel","Sadraque","Mesaque","Abednego"],"answerIndex":0}
+  ],
+  "92": [
+    {"question":"Quem foi elevado ao céu em um redemoinho de fogo?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem liderou a reconstrução dos muros de Jerusalém?","options":["Neemias","Esdras","Josué","Mardoqueu"],"answerIndex":0},
+    {"question":"Quem interpretou o sonho do faraó sobre vacas e espigas?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi batizado por João Batista?","options":["Jesus","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem foi o primeiro mártir cristão?","options":["Estevão","Tiago","Pedro","Paulo"],"answerIndex":0}
+  ],
+  "93": [
+    {"question":"Quem interpretou sonhos do rei Nabucodonosor sobre a estátua gigante?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi chamado por Deus ainda no ventre materno?","options":["Jeremias","Isaías","Moisés","Samuel"],"answerIndex":0},
+    {"question":"Quem teve uma visão de um vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem foi traído por Judas Iscariotes?","options":["Jesus","Pedro","João","Tiago"],"answerIndex":0},
+    {"question":"Quem profetizou sobre a restauração de Israel após o cativeiro?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem foi alimentado por um anjo durante quarenta dias no deserto?","options":["Elias","Moisés","Daniel","João Batista"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu sem morrer?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede durante o reinado de Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0}
+  ],
+  "94": [
+    {"question":"Quem foi o último juiz de Israel antes da monarquia?","options":["Samuel","Sansão","Elias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem ungiu Davi como rei?","options":["Samuel","Elias","Eliseu","Isaías"],"answerIndex":0},
+    {"question":"Quem foi engolido por um grande peixe?","options":["Jonas","Elias","Daniel","Moisés"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da sunamita?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem desafiou os profetas de Baal no Monte Carmelo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o nascimento do Messias em Belém?","options":["Miquéias","Isaías","Jeremias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem liderou o povo na travessia do rio Jordão?","options":["Josué","Moisés","Elias","Calebe"],"answerIndex":0},
+    {"question":"Quem foi traído e vendido pelos irmãos?","options":["José","Jacó","Esaú","Isaque"],"answerIndex":0},
+    {"question":"Quem construiu a arca para sobreviver ao dilúvio?","options":["Noé","Abraão","Moisés","Elias"],"answerIndex":0}
+  ],
+  "95": [
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem ressuscitou Lázaro depois de quatro dias?","options":["Jesus","Pedro","Paulo","Elias"],"answerIndex":0},
+    {"question":"Quem foi batizado por João Batista?","options":["Jesus","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi o primeiro mártir cristão?","options":["Estevão","Tiago","Pedro","Paulo"],"answerIndex":0},
+    {"question":"Quem foi elevado em um redemoinho de fogo?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva em Serepta?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0}
+  ],
+  "96": [
+    {"question":"Quem interpretou sonhos do faraó sobre vacas e espigas?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi ungido rei por Samuel ainda jovem?","options":["Davi","Saul","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem foi chamado por Deus ainda no ventre materno?","options":["Jeremias","Isaías","Moisés","Samuel"],"answerIndex":0},
+    {"question":"Quem teve uma visão de um vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o servo sofredor?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi alimentado por corvos durante uma seca?","options":["Elias","Eliseu","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem desafiou os profetas de Baal no Monte Carmelo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0}
+  ],
+  "97": [
+    {"question":"Quem liderou a reconstrução do muro de Jerusalém?","options":["Neemias","Esdras","Josué","Mardoqueu"],"answerIndex":0},
+    {"question":"Quem interpretou a escrita na parede durante o reinado de Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que denunciou Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o último juiz de Israel antes da monarquia?","options":["Samuel","Sansão","Elias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da sunamita?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu em um redemoinho de fogo?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do rei Nabucodonosor sobre a estátua gigante?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi traído e vendido pelos irmãos?","options":["José","Jacó","Esaú","Isaque"],"answerIndex":0},
+    {"question":"Quem construiu a arca?","options":["Noé","Abraão","Moisés","Elias"],"answerIndex":0}
+  ],
+  "98": [
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi batizado por João Batista?","options":["Jesus","Pedro","Paulo","Tiago"],"answerIndex":0},
+    {"question":"Quem negou Jesus três vezes antes do galo cantar?","options":["Pedro","Judas","Tomé","João"],"answerIndex":0},
+    {"question":"Quem ajudou a carregar a cruz de Jesus?","options":["Simão Cireneu","João","Pedro","Tiago"],"answerIndex":0},
+    {"question":"Quem disse: 'Eu sou o caminho, a verdade e a vida'?","options":["Jesus","Pedro","Paulo","João"],"answerIndex":0},
+    {"question":"Quem foi o primeiro mártir cristão?","options":["Estevão","Tiago","Pedro","Paulo"],"answerIndex":0},
+    {"question":"Quem foi elevado em um redemoinho de fogo?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva em Serepta?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da viúva de Sarepta?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do faraó sobre vacas e espigas?","options":["José","Daniel","Moisés","Elias"],"answerIndex":0}
+  ],
+  "99": [
+    {"question":"Quem foi ungido rei por Samuel ainda jovem?","options":["Davi","Saul","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem construiu o Templo em Jerusalém?","options":["Salomão","Davi","Josias","Ezequias"],"answerIndex":0},
+    {"question":"Quem curou Naamã, o sírio, da lepra?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem foi chamado por Deus ainda no ventre materno?","options":["Jeremias","Isaías","Moisés","Samuel"],"answerIndex":0},
+    {"question":"Quem teve uma visão de um vale de ossos secos?","options":["Ezequiel","Isaías","Jeremias","Daniel"],"answerIndex":0},
+    {"question":"Quem profetizou sobre o servo sofredor?","options":["Isaías","Jeremias","Ezequiel","Daniel"],"answerIndex":0},
+    {"question":"Quem multiplicou os pães e peixes para quatro mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi alimentado por corvos durante uma seca?","options":["Elias","Eliseu","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem desafiou os profetas de Baal no Monte Carmelo?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem liderou a reconstrução do muro de Jerusalém?","options":["Neemias","Esdras","Josué","Mardoqueu"],"answerIndex":0}
+  ],
+  "100": [
+    {"question":"Quem interpretou a escrita na parede durante o reinado de Belsazar?","options":["Daniel","José","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem foi o profeta que denunciou Acabe e Jezabel?","options":["Elias","Eliseu","Isaías","Jeremias"],"answerIndex":0},
+    {"question":"Quem foi o último juiz de Israel antes da monarquia?","options":["Samuel","Sansão","Elias","Ezequiel"],"answerIndex":0},
+    {"question":"Quem multiplicou o azeite da viúva?","options":["Eliseu","Elias","Moisés","Daniel"],"answerIndex":0},
+    {"question":"Quem ressuscitou o filho da sunamita?","options":["Eliseu","Elias","Jesus","Paulo"],"answerIndex":0},
+    {"question":"Quem foi elevado ao céu em um redemoinho de fogo?","options":["Elias","Enoque","Moisés","Jesus"],"answerIndex":0},
+    {"question":"Quem interpretou sonhos do rei Nabucodonosor sobre a estátua gigante?","options":["Daniel","José","Elias","Moisés"],"answerIndex":0},
+    {"question":"Quem foi traído e vendido pelos irmãos?","options":["José","Jacó","Esaú","Isaque"],"answerIndex":0},
+    {"question":"Quem construiu a arca?","options":["Noé","Abraão","Moisés","Elias"],"answerIndex":0},
+    {"question":"Quem multiplicou pães e peixes para cinco mil homens?","options":["Jesus","Pedro","Moisés","Elias"],"answerIndex":0}
+  ]
+};
+
+//----------------------FUNÇÕES------------------------
+function shuffleOptions(qObj){
+  const correctOption = qObj.options[qObj.answerIndex];
+  const shuffled = qObj.options.map(v=>({v,sort:Math.random()})).sort((a,b)=>a.sort-b.sort).map(o=>o.v);
+  qObj.options=shuffled;
+  qObj.answerIndex=shuffled.indexOf(correctOption);
+}
+
+function renderLevels(){
+  gradeEl.innerHTML='';
+  for(let i=1;i<=TOTAL_LEVELS;i++){
+    const card=document.createElement('div');
+    card.className='level-card';
+    if(!unlocked.includes(i)) card.classList.add('level-locked');
+    card.innerHTML=`<div class="level-num">Nível ${i}</div><div class="level-sub">${ROUNDS_PER_LEVEL} rodadas</div>`;
+    const lock=document.createElement('div');lock.className='lock-icon';
+    lock.innerText=unlocked.includes(i)?'':'🔒';
+    card.appendChild(lock);
+    card.onclick=()=>startLevel(i);
+    gradeEl.appendChild(card);
+  }
+}
+
+function getLevelQuestions(level){return questionsDB[level];}
+
+function startLevel(level){
+  const qArr=getLevelQuestions(level);
+  if(!qArr || qArr.length < ROUNDS_PER_LEVEL){
+    alert("Este nível ainda não tem perguntas.");
+    return;
+  }
+  currentLevel=level;currentRound=0;answersThisLevel=[];
+  levelBadge.innerText=`Nível ${level}`;
+  roundIndicator.innerText=`Rodada 1/${ROUNDS_PER_LEVEL}`;
+  levelsScreen.classList.remove('show');gameScreen.classList.add('show');
+  timeLeft=TIME_PER_LEVEL;timeLeftEl.innerText=timeLeft;clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{
+    timeLeft--;timeLeftEl.innerText=timeLeft;
+    if(timeLeft<=0){clearInterval(timerInterval);alert('Tempo esgotado!');tryAgain();}
+  },1000);
+  renderRound();
+}
+
+function renderRound(){
+  const qArr=getLevelQuestions(currentLevel);
+  const qObj=qArr[currentRound];
+  shuffleOptions(qObj);
+  questionText.innerText=qObj.question;
+  optionsBox.innerHTML='';
+  roundIndicator.innerText=`Rodada ${currentRound+1}/${ROUNDS_PER_LEVEL}`;
+  qObj.options.forEach((opt,i)=>{
+    const d=document.createElement('div');d.className='option';d.innerText=opt;
+    d.onclick=()=>selectOption(i,qObj,d);
+    optionsBox.appendChild(d);
+  });
+}
+
+function selectOption(index,qObj,elem){
+  const correct=index===qObj.answerIndex;
+  if(correct){elem.style.backgroundColor='var(--correct-green)';soundCorrect.play();}
+  else{elem.style.backgroundColor='var(--wrong-red)';soundWrong.play();}
+  setTimeout(()=>{
+    if(!correct){clearInterval(timerInterval);tryAgain();return;}
+    answersThisLevel[currentRound]={selectedIndex:index,correct:true};
+    currentRound++;
+    if(currentRound>=ROUNDS_PER_LEVEL){finishLevel();}else{renderRound();}
+  },500);
+}
+
+function tryAgain(){gameScreen.classList.remove('show');levelsScreen.classList.add('show');currentLevel=null;}
+function finishLevel(){clearInterval(timerInterval);const nextLevel=currentLevel+1;if(nextLevel<=TOTAL_LEVELS && !unlocked.includes(nextLevel)){unlocked.push(nextLevel);localStorage.setItem('nosplay_unlocked',JSON.stringify(unlocked));}alert(`Parabéns! Você completou o Nível ${currentLevel}!`);renderLevels();tryAgain();}
+
+//----------------------BOTÕES------------------------
+document.getElementById('btn-home').onclick=()=>{gameScreen.classList.remove('show');levelsScreen.classList.add('show');};
+document.getElementById('btn-music-toggle').onclick=()=>{
+  if(music.paused){music.play();document.getElementById('btn-music-toggle').innerText='Pause Music';}
+  else{music.pause();document.getElementById('btn-music-toggle').innerText='Play Music';}
+};
+document.getElementById('btn-exit').onclick=()=>{if(confirm('Deseja sair do app?')) window.location.href='about:blank';};
+
+renderLevels();
+</script>
+</body>
+</html>
